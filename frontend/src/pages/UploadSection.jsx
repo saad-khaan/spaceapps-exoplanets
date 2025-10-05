@@ -15,7 +15,7 @@ export default function UploadSection() {
     console.log("Planet Radius:", planetRadius);
     console.log("Orbital Days:", orbitalDays);
     console.log("Transit Period:", transitPeriod);
-    alert("Data submitted successfully 🚀");
+    alert("Data submitted successfully");
   };
 
   return (

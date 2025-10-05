@@ -1,25 +1,36 @@
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import SolarSystemBackground from "../components/SolarSystemBackground";
+import ShiningStarsBackground from "../components/ShiningStarsBackground";
 
 export default function MissionsPage() {
   const navigate = useNavigate();
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-b from-black via-gray-900 to-black text-white px-6 pt-40">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-b from-black via-gray-900 to-black text-white px-6 pt-24">
 
-      {/* ↑ Added padding-top to avoid overlap with navbar */}
 
       {/* === NASA Deep-Space Background === */}
       <div
-        className="absolute inset-0 bg-[url('https://images-assets.nasa.gov/image/PIA12235/PIA12235~orig.jpg')] bg-cover bg-center bg-fixed opacity-40"
+        className="absolute inset-0 bg-[url('https://images-assets.nasa.gov/image/PIA12235/PIA12235~orig.jpg')] bg-cover bg-center bg-fixed opacity-30"
       ></div>
 
-      {/* === Overlay gradient for depth === */}
-      <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/80 to-black/95"></div>
+      {/* === Shining Stars Background (brighter & clear) === */}
+      <div className="absolute inset-0 z-[2] pointer-events-none">
+        <ShiningStarsBackground />
+      </div>
+
+      {/* === Overlay gradient for smooth fade === */}
+      <div className="absolute inset-0 bg-gradient-to-b from-[#000814]/70 via-[#000814]/90 to-black/95 z-[1]"></div>
+
+      {/* === Transparent Navbar (no solid block, stars show through) === */}
+      <nav className="fixed top-0 w-full z-[50] bg-transparent backdrop-filter-none shadow-none border-none pointer-events-auto">
+  {/* your existing navbar content here */}
+</nav>
+
 
       {/* === Revolving Solar System Background === */}
-      <div className="absolute inset-0 z-[2] pointer-events-none">
+      <div className="absolute inset-0 z-[1] pointer-events-none">
         <SolarSystemBackground />
       </div>
 
@@ -33,7 +44,7 @@ export default function MissionsPage() {
           transition={{ duration: 0.8, ease: "easeOut" }}
           className="mt-1 text-3xl md:text-4xl font-semibold text-blue-300 mb-16 text-center drop-shadow-[0_0_10px_#00bfff]"
         >
-          Select a NASA mission to explore its exoplanet dataset
+          Select a NASA mission to test its exoplanet dataset
         </motion.p>
 
         {/* === Rotating Earth === */}
@@ -160,4 +171,3 @@ export default function MissionsPage() {
     </div>
   );
 }
-
