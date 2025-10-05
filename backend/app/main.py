@@ -35,7 +35,6 @@ app.add_middleware(
 MODEL_DIR     = Path(__file__).resolve().parent / "model"
 PIPELINE_PATH = MODEL_DIR / "best_pipeline.joblib"
 ENCODER_PATH  = MODEL_DIR / "label_encoder.joblib"
-
 _PIPELINE = None
 _ENCODER  = None  # optional sklearn LabelEncoder
 
