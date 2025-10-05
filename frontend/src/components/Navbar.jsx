@@ -10,14 +10,13 @@ export default function Navbar() {
       : "text-white hover:text-yellow-300";
 
   return (
-    <nav className="w-full bg-[#0b0b23] border-b border-gray-800 shadow-md fixed top-0 left-0 z-50">
-      {/* Remove horizontal padding (px-6 → px-0) so logo can touch the edge */}
+    <nav className="w-full fixed top-0 bg-transparent shadow-none backdrop-filter-none border-none text-white z-50 pointer-events-auto">
       <div className="w-full py-2 flex items-center justify-between">
         
         {/* === Left Side - NASA Logo === */}
         <Link
           to="/"
-          className="flex items-center space-x-3 ml-4" // small margin for breathing room
+          className="flex items-center space-x-3 ml-4"
         >
           <img
             src={nasaLogo}
@@ -35,7 +34,7 @@ export default function Navbar() {
             Missions
           </Link>
           <Link to="/about" className={isActive("/about")}>
-            About
+            About Us
           </Link>
         </div>
       </div>
