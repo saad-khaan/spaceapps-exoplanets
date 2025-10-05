@@ -1,8 +1,8 @@
 import { BrowserRouter as Router, Routes, Route, useLocation } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import Navbar from "./components/Navbar";
-import HeroSection from "./components/HeroSection";
-import UploadSection from "./components/UploadSection";
+import HeroSection from "./pages/HeroSection.jsx";
+import UploadSection from "./pages/UploadSection.jsx";
 import MissionsPage from "./pages/MissionsPage.jsx";
 import AboutPage from "./components/AboutPage.jsx";
 
@@ -55,9 +55,9 @@ function AnimatedRoutes() {
           }
         />
 
-        {/* Upload Page */}
+        {/* ✅ Upload Page (Dynamic for each mission) */}
         <Route
-          path="/upload"
+          path="/upload/:missionName"
           element={
             <motion.div
               key="upload"
@@ -71,7 +71,7 @@ function AnimatedRoutes() {
           }
         />
 
-        {/* ✅ About Page (newly added) */}
+        {/* About Page */}
         <Route
           path="/about"
           element={
@@ -90,6 +90,5 @@ function AnimatedRoutes() {
     </AnimatePresence>
   );
 }
+
 export default App;
-
-

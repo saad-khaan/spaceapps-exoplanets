@@ -6,8 +6,10 @@ export default function MissionsPage() {
   const navigate = useNavigate();
 
   return (
-    <div className="relative min-h-screen flex flex-col items-center justify-center overflow-hidden text-white">
-      
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-b from-black via-gray-900 to-black text-white px-6 pt-40">
+
+      {/* ↑ Added padding-top to avoid overlap with navbar */}
+
       {/* === NASA Deep-Space Background === */}
       <div
         className="absolute inset-0 bg-[url('https://images-assets.nasa.gov/image/PIA12235/PIA12235~orig.jpg')] bg-cover bg-center bg-fixed opacity-40"
@@ -16,12 +18,12 @@ export default function MissionsPage() {
       {/* === Overlay gradient for depth === */}
       <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/80 to-black/95"></div>
 
-      {/* === Revolving Solar System Background (above background, behind content) === */}
+      {/* === Revolving Solar System Background === */}
       <div className="absolute inset-0 z-[2] pointer-events-none">
         <SolarSystemBackground />
       </div>
 
-      {/* === Main Page Content (above everything else) === */}
+      {/* === Main Page Content === */}
       <div className="relative z-10 flex flex-col items-center justify-center">
 
         {/* === Header Above Earth === */}
@@ -29,13 +31,13 @@ export default function MissionsPage() {
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, ease: "easeOut" }}
-          className="mb-48 text-blue-200 text-xl font-semibold text-center tracking-wide drop-shadow-[0_0_6px_#00bfff]"
+          className="mt-1 text-3xl md:text-4xl font-semibold text-blue-300 mb-16 text-center drop-shadow-[0_0_10px_#00bfff]"
         >
-          Select a NASA mission to explore its exoplanet dataset 🌌
+          Select a NASA mission to explore its exoplanet dataset
         </motion.p>
 
         {/* === Rotating Earth === */}
-        <div className="relative flex items-center justify-center">
+        <div className="relative flex items-center justify-center mt-20">
           <motion.img
             src="https://upload.wikimedia.org/wikipedia/commons/9/97/The_Earth_seen_from_Apollo_17.jpg"
             alt="Planet Earth"
@@ -47,10 +49,6 @@ export default function MissionsPage() {
               ease: "linear",
             }}
           />
-
-          {/* ================================
-                MISSION BUTTONS + TOOLTIPS
-          ================================= */}
 
           {/* === TESS (top) === */}
           <div
@@ -68,7 +66,7 @@ export default function MissionsPage() {
               animate="rest"
             >
               <motion.button
-                onClick={() => navigate("/upload?tess")}
+                onClick={() => navigate("/upload/tess")}
                 className="bg-blue-600 hover:bg-blue-700 px-6 py-3 rounded-full text-lg font-semibold shadow-[0_0_25px_#00bfff] transition-transform hover:scale-110"
               >
                 TESS
@@ -103,7 +101,7 @@ export default function MissionsPage() {
               animate="rest"
             >
               <motion.button
-                onClick={() => navigate("/upload?k2")}
+                onClick={() => navigate("/upload/k2")}
                 className="bg-purple-600 hover:bg-purple-700 px-6 py-3 rounded-full text-lg font-semibold shadow-[0_0_25px_#b266ff] transition-transform hover:scale-110"
               >
                 K2
@@ -138,7 +136,7 @@ export default function MissionsPage() {
               animate="rest"
             >
               <motion.button
-                onClick={() => navigate("/upload?koi")}
+                onClick={() => navigate("/upload/koi")}
                 className="bg-pink-600 hover:bg-pink-700 px-6 py-3 rounded-full text-lg font-semibold shadow-[0_0_25px_#ff3fa4] transition-transform hover:scale-110"
               >
                 KOI
@@ -162,3 +160,4 @@ export default function MissionsPage() {
     </div>
   );
 }
+
