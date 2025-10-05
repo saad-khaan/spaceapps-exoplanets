@@ -370,21 +370,27 @@ def health(model: Optional[str] = Query(None)):
         "has_model_card": os.path.exists(card_path),
     }
 
+# ... (everything above unchanged)
+
 @app.get("/model_card")
 def model_card(model: Optional[str] = Query(None)):
-    """
-    Serve the static model_card.json placed alongside model artifacts.
-    """
     spec = _get_spec(model)
     base_dir = os.path.dirname(spec.pipeline_path)
     card_path = os.path.join(base_dir, "model_card.json")
     if not os.path.exists(card_path):
         raise HTTPException(404, f"model_card.json not found for model '{spec.slug}'")
-    try:
-        with open(card_path, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception as e:
-        raise HTTPException(500, f"Failed to load model_card.json: {e}")
+    with open(card_path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+@app.get("/model_card/{model}")
+def model_card_path(model: str):
+    spec = _get_spec(model.lower())
+    base_dir = os.path.dirname(spec.pipeline_path)
+    card_path = os.path.join(base_dir, "model_card.json")
+    if not os.path.exists(card_path):
+        raise HTTPException(404, f"model_card.json not found for model '{spec.slug}'")
+    with open(card_path, "r", encoding="utf-8") as f:
+        return json.load(f)
 
 # ----------------- Endpoints -----------------
 @app.post("/predict")

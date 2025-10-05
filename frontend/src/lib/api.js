@@ -1,7 +1,8 @@
+// src/lib/api.js
 import { API_BASE } from "../missions/config";
 
 function buildUrl(path, model) {
-  const u = new URL(path, API_BASE);
+  const u = new URL(path, API_BASE);   // <- always points to FastAPI base
   if (model) u.searchParams.set("model", model);
   return u.toString();
 }
@@ -19,7 +20,19 @@ async function postFile(url, file) {
 }
 
 export const api = {
-  evaluate(file, model) { return postFile(buildUrl("/evaluate", model), file); },
-  predict(file, model)  { return postFile(buildUrl("/predict",  model), file); },
-  predictCsv(file, model){return postFile(buildUrl("/predict_csv", model), file);},
+  evaluate(file, model)   { return postFile(buildUrl("/evaluate",    model), file); },
+  predict(file, model)    { return postFile(buildUrl("/predict",     model), file); },
+  predictCsv(file, model) { return postFile(buildUrl("/predict_csv", model), file); },
+
+  async getModelCard(model) {
+    // use the path-param route so we don’t need query strings
+    const url = new URL(`/model_card/${encodeURIComponent(model)}`, API_BASE).toString();
+    const res = await fetch(url);
+    if (!res.ok) {
+      let msg = res.statusText;
+      try { msg = await res.text(); } catch {}
+      throw new Error(msg);
+    }
+    return res.json();
+  },
 };

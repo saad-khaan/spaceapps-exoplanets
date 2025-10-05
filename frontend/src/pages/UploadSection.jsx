@@ -1,5 +1,6 @@
+// UploadSection.jsx
 import { useParams } from "react-router-dom";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { api } from "../lib/api";
 import { MISSION_TO_MODEL } from "../missions/config";
@@ -7,7 +8,8 @@ import { MISSION_TO_MODEL } from "../missions/config";
 /* =========================
    Small helpers
 ========================= */
-const fmt = (x) => (x === null || x === undefined || Number.isNaN(x) ? "-" : Number(x).toFixed(4));
+const fmt = (x) =>
+  x === null || x === undefined || Number.isNaN(x) ? "-" : Number(x).toFixed(4);
 const bandClass = (v) =>
   v >= 0.8 ? "text-green-400" : v >= 0.6 ? "text-yellow-400" : "text-red-400";
 
@@ -81,7 +83,7 @@ export default function UploadSection() {
       const r = await api.evaluate(file, model);
       setEvalRes(r);
       saveLast(model, r);
-      setMsg(`Analyzed ${missionKey} with ground-truth labels ✅`);
+      setMsg(`Analyzed ${missionKey} with ground-truth labels`);
     } catch (e) {
       if (e.status === 400 && /label/i.test(e.message)) {
         const p = await api.predict(file, model);
@@ -97,14 +99,23 @@ export default function UploadSection() {
 
   const openModelCard = async () => {
     try {
-      const res = await fetch(`/model_card?model=${encodeURIComponent(model)}`);
-      if (!res.ok) throw new Error(await res.text());
-      setModelCard(await res.json());
+      const card = await api.getModelCard(model);
+      setModelCard(card);
       setCardOpen(true);
     } catch (e) {
       setMsg(`Could not load model card: ${e.message}`);
     }
   };
+
+  // Close model card with Escape
+  useEffect(() => {
+    if (!cardOpen) return;
+    const onKeyDown = (e) => {
+      if (e.key === "Escape") setCardOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [cardOpen]);
 
   // Build per-class rows from classification_report
   const perClassRows = useMemo(() => {
@@ -242,14 +253,12 @@ export default function UploadSection() {
             <MetricCard
               label="Balanced Acc."
               value={fmt(evalRes.balanced_accuracy)}
-              delta={
-                last ? evalRes.balanced_accuracy - (last.balanced_accuracy ?? 0) : null
-              }
+              delta={last ? evalRes.balanced_accuracy - (last.balanced_accuracy ?? 0) : null}
             />
           </div>
 
           {/* Confusion matrix + distribution */}
-          {(labels.length && matrix.length) ? (
+          {labels.length && matrix.length ? (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div className="bg-white/5 border border-white/10 rounded p-4">
                 <div className="flex items-center gap-2 mb-2">
@@ -288,7 +297,8 @@ export default function UploadSection() {
                           const raw = matrix[i][j];
                           const intensity = maxCell ? v / maxCell : 0;
                           const bg = `rgba(34,197,94,${0.12 + 0.75 * intensity})`;
-                          const label = normMode === "row" ? `${(v * 100).toFixed(1)}%` : String(raw);
+                          const label =
+                            normMode === "row" ? `${(v * 100).toFixed(1)}%` : String(raw);
                           return (
                             <div
                               key={`${i}-${j}`}
@@ -338,7 +348,10 @@ export default function UploadSection() {
                       <td className={`py-2 ${bandClass(r.recall)}`}>{fmt(r.recall)}</td>
                       <td className={`py-2 ${bandClass(r.f1)}`}>{fmt(r.f1)}</td>
                       <td className="py-2">
-                        <SupportBar value={r.support} total={perClassRows.reduce((a,b)=>a+b.support,0)} />
+                        <SupportBar
+                          value={r.support}
+                          total={perClassRows.reduce((a, b) => a + b.support, 0)}
+                        />
                         <span className="text-xs text-slate-400 ml-2">{r.support}</span>
                       </td>
                     </tr>
@@ -348,15 +361,8 @@ export default function UploadSection() {
             </div>
           )}
 
-          {/* Notes */}
-          <div className="bg-white/5 border border-white/10 rounded p-4">
-            <div className="text-sm text-slate-300 mb-1">Next steps</div>
-            <ul className="list-disc pl-5 text-sm space-y-1">
-              <li>Use the matrix’s row-normalized mode to see which classes are missed most.</li>
-              <li>Focus on classes with lowest recall (top of the table) — consider class balancing or threshold tuning.</li>
-              <li>Share the model card for context on data and limitations.</li>
-            </ul>
-          </div>
+          {/* Insights & Recommendations */}
+          <Insights evalRes={evalRes} />
         </div>
       )}
 
@@ -366,7 +372,10 @@ export default function UploadSection() {
           <h2 className="text-xl font-semibold text-blue-300">Predictions</h2>
 
           <div className="grid sm:grid-cols-3 gap-4">
-            <MetricCard label="Rows received" value={predRes.n_rows ?? predRes.rows_received ?? "-"} />
+            <MetricCard
+              label="Rows received"
+              value={predRes.n_rows ?? predRes.rows_received ?? "-"}
+            />
             <MetricCard
               label="Unique counts"
               value={
@@ -402,6 +411,10 @@ export default function UploadSection() {
           <div
             className="bg-zinc-950 border border-white/10 rounded-xl max-w-3xl w-full p-4"
             onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Model card"
+            tabIndex={-1}
           >
             <div className="flex items-center mb-2">
               <div className="text-lg font-semibold">Model card</div>
@@ -413,7 +426,7 @@ export default function UploadSection() {
               </button>
             </div>
             <pre className="mt-3 text-xs overflow-auto max-h-[70vh] bg-zinc-900 p-3 rounded">
-{JSON.stringify(modelCard, null, 2)}
+              {JSON.stringify(modelCard, null, 2)}
             </pre>
           </div>
         </div>
@@ -425,6 +438,7 @@ export default function UploadSection() {
 /* =========================
    Tiny presentational bits
 ========================= */
+
 function MetricCard({ label, value, delta = null }) {
   const showDelta = delta !== null && delta !== undefined && Number.isFinite(delta);
   const up = showDelta && delta >= 0;
@@ -458,16 +472,22 @@ function SupportBar({ value, total }) {
 function MiniBars({ counts }) {
   const entries = Object.entries(counts || {});
   const total = entries.reduce((a, [, n]) => a + n, 0) || 1;
-  const maj = entries.reduce((p, c) => (c[1] > p[1] ? c : p), entries[0] || ["N/A", 0]);
+  const maj =
+    entries.reduce((p, c) => (c[1] > p[1] ? c : p), entries[0] || ["N/A", 0]);
 
   return (
     <div className="space-y-2">
       <div className="flex gap-3 items-end">
         {entries.map(([k, v]) => (
           <div key={k} className="text-center">
-            <div className="w-10 bg-zinc-700" style={{ height: `${(v / total) * 80 + 10}px` }} />
+            <div
+              className="w-10 bg-zinc-700"
+              style={{ height: `${(v / total) * 80 + 10}px` }}
+            />
             <div className="text-xs mt-1">{k}</div>
-            <div className="text-[10px] text-slate-400">{((v / total) * 100).toFixed(1)}%</div>
+            <div className="text-[10px] text-slate-400">
+              {((v / total) * 100).toFixed(1)}%
+            </div>
           </div>
         ))}
       </div>
@@ -477,6 +497,190 @@ function MiniBars({ counts }) {
           ({((maj[1] / total) * 100).toFixed(1)}%)
         </div>
       )}
+    </div>
+  );
+}
+
+/* ===== Insights block (top-level) ===== */
+
+function Headline({ label, value }) {
+  return (
+    <div className="rounded bg-white/5 border border-white/10 p-3">
+      <div className="text-xs uppercase tracking-wide text-slate-400">{label}</div>
+      <div className="text-lg font-semibold">{value}</div>
+    </div>
+  );
+}
+
+function Insights({ evalRes }) {
+  if (!evalRes) return null;
+
+  const round = (x, d = 4) =>
+    x === undefined || x === null || Number.isNaN(Number(x))
+      ? "-"
+      : Number(x).toFixed(d);
+
+  const cr = evalRes.classification_report || {};
+  const labels =
+    (evalRes.confusion_matrix && evalRes.confusion_matrix.labels) || [];
+  const cm =
+    (evalRes.confusion_matrix && evalRes.confusion_matrix.matrix) || [];
+
+  const perClass = Object.entries(cr)
+    .filter(
+      ([k, v]) =>
+        v && typeof v === "object" && !["accuracy", "macro avg", "weighted avg"].includes(k)
+    )
+    .map(([name, m]) => ({
+      name,
+      precision: Number(m.precision ?? NaN),
+      recall: Number(m.recall ?? NaN),
+      f1: Number(m["f1-score"] ?? NaN),
+      support: Number(m.support ?? 0),
+    }));
+
+  const byRecall = [...perClass].sort((a, b) => b.recall - a.recall);
+  const weakest = byRecall.slice(-2);
+  const strongest = byRecall.slice(0, 2);
+
+  let predCounts =
+    evalRes.prediction_counts || evalRes.counts_by_class || null;
+  if (!predCounts && cm.length && labels.length === cm.length) {
+    const cols = Array(labels.length).fill(0);
+    for (let r = 0; r < cm.length; r++) {
+      for (let c = 0; c < cm[r].length; c++) cols[c] += cm[r][c];
+    }
+    predCounts = Object.fromEntries(labels.map((lab, i) => [lab, cols[i]]));
+  }
+  const predDist = predCounts
+    ? Object.entries(predCounts).sort((a, b) => b[1] - a[1])
+    : [];
+
+  let worstPair = null;
+  if (cm.length && labels.length === cm.length) {
+    let max = 0,
+      from = "",
+      to = "";
+    for (let r = 0; r < cm.length; r++) {
+      for (let c = 0; c < cm[r].length; c++) {
+        if (r !== c && cm[r][c] > max) {
+          max = cm[r][c];
+          from = labels[r];
+          to = labels[c];
+        }
+      }
+    }
+    if (max > 0) worstPair = { from, to, count: max };
+  }
+
+  const bySupport = [...perClass].sort((a, b) => b.support - a.support);
+  const imbalance =
+    bySupport.length >= 2 &&
+    bySupport[0].support > 5 * Math.max(1, bySupport[bySupport.length - 1].support);
+
+  const actions = [];
+  if (weakest.length) {
+    actions.push(
+      `Improve recall for ${weakest.map((w) => w.name).join(
+        " & "
+      )} (target examples, augmentation, or reweighting).`
+    );
+  }
+  if (worstPair) {
+    actions.push(
+      `Largest confusion: ${worstPair.from} → ${worstPair.to} (${worstPair.count}). Add features/examples to separate them.`
+    );
+  }
+  if (predDist.length) {
+    const [topLabel, topCount] = predDist[0];
+    const total = predDist.reduce((s, [, n]) => s + n, 0);
+    const pct = total ? (100 * topCount) / total : 0;
+    if (pct > 50)
+      actions.push(
+        `Predictions skew to ${topLabel} (${pct.toFixed(
+          1
+        )}%). Check class balance or adjust thresholds.`
+      );
+  }
+  if (imbalance)
+    actions.push(
+      "Dataset is imbalanced (largest class >5× smallest). Consider class weights or resampling."
+    );
+  actions.push(
+    "Share the model card for context on data, metrics, and limitations."
+  );
+
+  return (
+    <div className="mt-8 w-full max-w-4xl">
+      <h3 className="text-lg font-semibold text-blue-300 mb-3">
+        Insights & Recommendations
+      </h3>
+
+      <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+        <Headline
+          label="Rows"
+          value={evalRes.evaluated_rows ?? evalRes.n_rows ?? "-"}
+        />
+        <Headline label="Accuracy" value={round(evalRes.accuracy)} />
+        <Headline
+          label="F1 (macro)"
+          value={round(evalRes.macro_f1 || evalRes.f1_macro)}
+        />
+        <Headline
+          label="Balanced Acc."
+          value={round(evalRes.balanced_accuracy)}
+        />
+      </div>
+
+      <div className="bg-white/5 border border-white/10 rounded p-4 mb-4">
+        <div className="font-medium mb-2">Class strengths & opportunities</div>
+        <div className="text-sm text-slate-200">
+          <div className="mb-2">
+            <span className="text-slate-400">Strongest (recall): </span>
+            {strongest.map((s) => `${s.name} (R=${round(s.recall)})`).join(", ") ||
+              "-"}
+          </div>
+          <div>
+            <span className="text-slate-400">Needs attention (recall): </span>
+            {weakest.map((w) => `${w.name} (R=${round(w.recall)})`).join(", ") ||
+              "-"}
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white/5 border border-white/10 rounded p-4 mb-4">
+        <div className="font-medium mb-2">Error patterns & bias</div>
+        <ul className="list-disc ml-5 text-sm space-y-1">
+          {worstPair ? (
+            <li>
+              <span className="text-slate-300">Largest confusion:</span>{" "}
+              {worstPair.from} → {worstPair.to} ({worstPair.count})
+            </li>
+          ) : (
+            <li>No dominant confusion found.</li>
+          )}
+          {predDist.length ? (
+            <li>
+              <span className="text-slate-300">Prediction distribution:</span>{" "}
+              {predDist.map(([k, v]) => `${k}: ${v}`).join(", ")}
+            </li>
+          ) : null}
+          {imbalance && (
+            <li>
+              Dataset is imbalanced; consider class weights or resampling.
+            </li>
+          )}
+        </ul>
+      </div>
+
+      <div className="bg-white/5 border border-white/10 rounded p-4">
+        <div className="font-medium mb-2">Recommended actions</div>
+        <ul className="list-disc ml-5 text-sm space-y-1">
+          {actions.map((a, i) => (
+            <li key={i}>{a}</li>
+          ))}
+        </ul>
+      </div>
     </div>
   );
 }

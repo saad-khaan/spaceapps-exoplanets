@@ -1,0 +1,95 @@
+{
+  "model_name": "KOI SVM (RBF)",
+  "version": "2025.10.05",
+  "dataset_name": "Kepler Objects of Interest (KOI)",
+  "trained_on": "2025-10-05",
+  "classes": [
+    "CANDIDATE",
+    "FALSE POSITIVE"
+  ],
+  "headlines": {
+    "accuracy": 0.8525875588081547,
+    "macro_f1": 0.852558187840955,
+    "balanced_accuracy": 0.852558187840955
+  },
+  "cv": {
+    "n_splits": 5,
+    "macro_f1_mean": 0.8418340558778432,
+    "macro_f1_std": 0.01167405060002898,
+    "balanced_accuracy_mean": 0.8419174958104939,
+    "balanced_accuracy_std": 0.01167014659729795,
+    "accuracy_mean": 0.8418533744871779,
+    "accuracy_std": 0.01168078242982038
+  },
+  "test_confusion_matrix": {
+    "format": "rows=true, cols=pred, label_order=classes",
+    "labels": [
+      "CANDIDATE",
+      "FALSE POSITIVE"
+    ],
+    "matrix": [
+      [
+        802,
+        141
+      ],
+      [
+        141,
+        829
+      ]
+    ]
+  },
+  "classification_report": {
+    "CANDIDATE": {
+      "precision": 0.8504772004241782,
+      "recall": 0.8504772004241782,
+      "f1-score": 0.8504772004241782,
+      "support": 943.0
+    },
+    "FALSE POSITIVE": {
+      "precision": 0.8546391752577319,
+      "recall": 0.8546391752577319,
+      "f1-score": 0.8546391752577319,
+      "support": 970.0
+    },
+    "accuracy": 0.8525875588081547,
+    "macro avg": {
+      "precision": 0.852558187840955,
+      "recall": 0.852558187840955,
+      "f1-score": 0.852558187840955,
+      "support": 1913.0
+    },
+    "weighted avg": {
+      "precision": 0.8525875588081547,
+      "recall": 0.8525875588081547,
+      "f1-score": 0.8525875588081547,
+      "support": 1913.0
+    }
+  },
+  "data_summary": {
+    "train_class_distribution": {
+      "CANDIDATE": 0.493269,
+      "FALSE POSITIVE": 0.506731
+    },
+    "test_class_distribution": {
+      "CANDIDATE": 0.492943,
+      "FALSE POSITIVE": 0.507057
+    },
+    "n_features": 25,
+    "feature_names_hash": "sha256:33dea087ce0da28497b120b49064db63c03869f4076c958964ad13b02a9e3a01"
+  },
+  "preprocessing": "Auto-detect header; drop empty rows/cols; drop known KOI ID/flag columns; convert paired *_err1/*_err2 into <base>_rel_error; numeric coercion; drop degenerate features; SimpleImputer(median) + PowerTransformer(Yeo-Johnson) inside pipeline.",
+  "model": {
+    "estimator": "SVC(kernel='rbf', class_weight='balanced')",
+    "C": 45.7,
+    "gamma": 0.0248,
+    "probability": true,
+    "scaler": "PowerTransformer(yeo-johnson, standardize=True)",
+    "imputer": "SimpleImputer(median)"
+  },
+  "limitations": "Performance depends on alignment with training distribution; SVM not inherently calibrated; consider human review for edge/low-margin cases.",
+  "artifacts": {
+    "pipeline_path": "koi_best_pipeline.joblib",
+    "label_encoder_path": "koi_label_encoder.joblib",
+    "feature_names_path": "feature_names.json"
+  }
+}
