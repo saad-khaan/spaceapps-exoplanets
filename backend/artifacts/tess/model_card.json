@@ -1,0 +1,166 @@
+{
+  "model_name": "TESS HistGradientBoosting",
+  "version": "2025.10.05",
+  "dataset_name": "TESS",
+  "trained_on": "2025-10-05",
+  "classes": [
+    "APC",
+    "CP",
+    "FA",
+    "FP",
+    "KP",
+    "PC"
+  ],
+  "headlines": {
+    "accuracy": 0.7261518494484102,
+    "macro_f1": 0.4788673392622924,
+    "balanced_accuracy": 0.4333969118828378
+  },
+  "cv": {
+    "n_splits": 5,
+    "macro_f1_mean": 0.4756191751191043,
+    "macro_f1_std": 0.019044166232380297,
+    "balanced_accuracy_mean": 0.4256967752599404,
+    "balanced_accuracy_std": 0.016668272029805704,
+    "accuracy_mean": 0.7098349237947779,
+    "accuracy_std": 0.011938095408036467
+  },
+  "test_confusion_matrix": {
+    "format": "rows=true, cols=pred, label_order=classes",
+    "labels": [
+      "APC",
+      "CP",
+      "FA",
+      "FP",
+      "KP",
+      "PC"
+    ],
+    "matrix": [
+      [
+        15,
+        2,
+        0,
+        23,
+        1,
+        51
+      ],
+      [
+        1,
+        64,
+        0,
+        3,
+        6,
+        63
+      ],
+      [
+        0,
+        0,
+        1,
+        5,
+        0,
+        14
+      ],
+      [
+        10,
+        4,
+        1,
+        116,
+        1,
+        107
+      ],
+      [
+        0,
+        2,
+        0,
+        2,
+        60,
+        53
+      ],
+      [
+        11,
+        22,
+        0,
+        29,
+        11,
+        863
+      ]
+    ]
+  },
+  "classification_report": {
+    "APC": {
+      "precision": 0.40540540540540543,
+      "recall": 0.16304347826086957,
+      "f1-score": 0.23255813953488372,
+      "support": 92.0
+    },
+    "CP": {
+      "precision": 0.6808510638297872,
+      "recall": 0.46715328467153283,
+      "f1-score": 0.5541125541125541,
+      "support": 137.0
+    },
+    "FA": {
+      "precision": 0.5,
+      "recall": 0.05,
+      "f1-score": 0.09090909090909091,
+      "support": 20.0
+    },
+    "FP": {
+      "precision": 0.651685393258427,
+      "recall": 0.48535564853556484,
+      "f1-score": 0.5563549160671463,
+      "support": 239.0
+    },
+    "KP": {
+      "precision": 0.759493670886076,
+      "recall": 0.5128205128205128,
+      "f1-score": 0.6122448979591837,
+      "support": 117.0
+    },
+    "PC": {
+      "precision": 0.7497827975673328,
+      "recall": 0.9220085470085471,
+      "f1-score": 0.827024436990896,
+      "support": 936.0
+    },
+    "accuracy": 0.7261518494484102,
+    "macro avg": {
+      "precision": 0.6245363884911714,
+      "recall": 0.4333969118828378,
+      "f1-score": 0.4788673392622924,
+      "support": 1541.0
+    },
+    "weighted avg": {
+      "precision": 0.7053758339048907,
+      "recall": 0.7261518494484102,
+      "f1-score": 0.6994310847459845,
+      "support": 1541.0
+    }
+  },
+  "data_summary": {
+    "train_class_distribution": {
+      "APC": 0.060045,
+      "CP": 0.08877,
+      "FA": 0.012658,
+      "FP": 0.155469,
+      "KP": 0.075625,
+      "PC": 0.607433
+    },
+    "test_class_distribution": {
+      "APC": 0.059701,
+      "CP": 0.088903,
+      "FA": 0.012979,
+      "FP": 0.155094,
+      "KP": 0.075925,
+      "PC": 0.607398
+    },
+    "n_features": 28
+  },
+  "preprocessing": "CSV header auto-detect (if used upstream); drop empty rows/cols; drop dataset-specific ID/date/lim columns if present; add relative-error uncertainty features; numeric coercion; drop degenerate features; SimpleImputer(median).",
+  "limitations": "Performance depends on data similarity to training distribution; no explicit calibration; human review recommended for low-confidence cases.",
+  "artifacts": {
+    "pipeline_path": "histgb_best_pipeline.joblib",
+    "label_encoder_path": "histgb_label_encoder.joblib",
+    "feature_names_path": "feature_names.json"
+  }
+}

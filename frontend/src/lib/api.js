@@ -1,19 +1,25 @@
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
+import { API_BASE } from "../missions/config";
 
-async function postFile(path, file) {
+function buildUrl(path, model) {
+  const u = new URL(path, API_BASE);
+  if (model) u.searchParams.set("model", model);
+  return u.toString();
+}
+
+async function postFile(url, file) {
   const form = new FormData();
   form.append("file", file);
-  const res = await fetch(`${BASE_URL}${path}`, { method: "POST", body: form });
-  const data = await res.json().catch(() => ({}));
+  const res = await fetch(url, { method: "POST", body: form });
   if (!res.ok) {
-    const msg = data?.detail || `HTTP ${res.status}`;
-    const err = new Error(msg);
-    err.status = res.status;
-    throw err;
+    let msg = res.statusText;
+    try { msg = (await res.json()).detail || msg; } catch {}
+    const e = new Error(msg); e.status = res.status; throw e;
   }
-  return data;
+  return res.json();
 }
 
 export const api = {
-  evaluate: (file) => postFile("/evaluate", file),
+  evaluate(file, model) { return postFile(buildUrl("/evaluate", model), file); },
+  predict(file, model)  { return postFile(buildUrl("/predict",  model), file); },
+  predictCsv(file, model){return postFile(buildUrl("/predict_csv", model), file);},
 };
