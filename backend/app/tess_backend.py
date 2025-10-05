@@ -1,9 +1,8 @@
-# main.py
-# FastAPI inference server for your pretrained KOI SVM pipeline
-# - Loads pipeline + LabelEncoder + training feature order
-# - Reuses your header detection + uncertainty-feature preprocessing
-# - Adds startup diagnostics and a helpful /health endpoint
-# - Adds / root redirect to /docs so you don't see 404
+# TESS Backend
+# FastAPI inference server for your pretrained TESS (TOI) pipeline
+# - Loads pipeline + LabelEncoder + training feature order from artifacts/tess/
+# - Robust header detection with fallback to header row 0
+# - Same endpoints as KOI: /health, /predict, /predict_csv, /evaluate
 
 import os
 import io
@@ -26,85 +25,98 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 
 # =========================
-# Training-time constants (must match your notebook)
+# Training-time constants (should match the notebook used for TESS training)
 # =========================
-label_col       = "koi_pdisposition"
+label_col       = "tfopwg_disposition"   # common TESS/TOI label column
 keep_asymmetric = False
 min_den         = 1e-12
 
+# Drop obvious IDs / refs if present (keep list modest to avoid over-dropping)
 cols_to_drop = [
-    "kepid", "kepoi_name", "kepler_name",
-    "koi_disposition", "koi_score",
-    "koi_fpflag_nt", "koi_fpflag_ss", "koi_fpflag_co", "koi_fpflag_ec",
-    "koi_tce_plnt_num", "koi_tce_delivname"
+    "tid", "toi", "toi_name", "tic_id", "hostname",
+    "disp_refname", "pl_refname", "st_refname", "sy_refname",
+    "default_flag",
 ]
 
-header_identifiers = ["koi_period", "koi_depth", "koi_duration", label_col]
+# Try to detect header using these tokens; fall back to header=0
+header_identifiers = [
+    label_col,
+    "tfopwg_disposition",   # alias just in case
+    "toi", "toi_period",    # TESS-style names
+    "pl_orbper",            # generic orbital period
+    "pl_rade",              # generic planet radius (earth radii)
+    "st_teff",              # star temperature
+    "koi_period", "koi_depth", "koi_duration"  # keep some KOI tokens as a safety net
+]
 
 # artifact paths (relative to project root)
-PIPE_PATH = "artifacts/koi/best_pipeline.joblib"
-LE_PATH   = "artifacts/koi/label_encoder.joblib"
-FEATURE_NAMES_JSON = "artifacts/koi/feature_names.json"
+PIPE_PATH = "artifacts/tess/best_pipeline.joblib"
+LE_PATH   = "artifacts/tess/label_encoder.joblib"
+FEATURE_NAMES_JSON = "artifacts/tess/feature_names.json"
 
-# Optional: warn if runtime sklearn mismatches your training version
-TRAINED_SKLEARN = "1.7.2"   # set this to the version you used in Colab when saving
+# Optional: warn if runtime sklearn mismatches training version
+TRAINED_SKLEARN = "1.7.2"
 if sklearn.__version__ != TRAINED_SKLEARN:
     warnings.warn(
-        f"Model trained with scikit-learn {TRAINED_SKLEARN}, "
-        f"but runtime has {sklearn.__version__}. Align to avoid issues."
+        f"TESS model trained with scikit-learn {TRAINED_SKLEARN}, "
+        f"but runtime has {sklearn.__version__}. Align versions to avoid issues."
     )
 
 # =========================
 # Startup diagnostics
 # =========================
-print("[startup] sklearn version:", sklearn.__version__)
-print("[startup] cwd:", os.getcwd())
-print("[startup] artifacts abs path:", os.path.abspath("artifacts"))
+print("[tess] sklearn version:", sklearn.__version__)
+print("[tess] cwd:", os.getcwd())
+print("[tess] artifacts abs path:", os.path.abspath("artifacts"))
 for p in ["artifacts", PIPE_PATH, LE_PATH, FEATURE_NAMES_JSON]:
-    print(f"[startup] exists({p}) ->", os.path.exists(p))
+    print(f"[tess] exists({p}) ->", os.path.exists(p))
 
 # =========================
 # Load artifacts
 # =========================
 try:
     pipe = joblib.load(PIPE_PATH)
-    print("[startup] pipeline loaded OK")
+    print("[tess] pipeline loaded OK")
 except Exception as e:
-    raise RuntimeError(f"Could not load pipeline from {PIPE_PATH}: {e}")
+    raise RuntimeError(f"Could not load TESS pipeline from {PIPE_PATH}: {e}")
 
 try:
     le = joblib.load(LE_PATH)
-    print("[startup] loaded label_encoder type:", type(le))
+    print("[tess] loaded label_encoder type:", type(le))
     if hasattr(le, "classes_"):
         class_names = list(le.classes_)
-        print("[startup] label_encoder classes:", class_names)
+        print("[tess] label_encoder classes:", class_names)
     else:
-        print("[startup] label_encoder has no 'classes_' attribute")
+        print("[tess] label_encoder has no 'classes_' attribute")
         class_names = None
 except Exception as e:
     le = None
     class_names = None
-    print("[startup] failed to load label_encoder:", repr(e))
+    print("[tess] failed to load label_encoder:", repr(e))
 
 def load_training_feature_names() -> Optional[List[str]]:
     try:
         with open(FEATURE_NAMES_JSON, "r", encoding="utf-8") as f:
             names = json.load(f)
             if isinstance(names, list) and all(isinstance(c, str) for c in names):
-                print(f"[startup] loaded {len(names)} training feature names")
+                print(f"[tess] loaded {len(names)} training feature names")
                 return names
     except Exception as e:
-        print("[startup] feature_names.json not loaded:", repr(e))
+        print("[tess] feature_names.json not loaded:", repr(e))
     return None
 
 TRAIN_FEATURES = load_training_feature_names()
 
 # =========================
-# Preprocessing utils (match your notebook)
+# Preprocessing utils
 # =========================
 def detect_header_row_from_bytes(content: bytes,
                                  identifiers: List[str],
                                  max_lines: int = 200) -> int:
+    """
+    Try to find a header row that contains one of identifiers (case-insensitive).
+    If none found, return 0 (fallback).
+    """
     text = content.decode("utf-8", errors="ignore")
     reader = csv.reader(io.StringIO(text))
     for i, row in enumerate(reader):
@@ -114,7 +126,8 @@ def detect_header_row_from_bytes(content: bytes,
         for token in identifiers:
             if str(token).strip().lower() in norm:
                 return i
-    raise ValueError("Could not detect header. Update header_identifiers if needed.")
+    # IMPORTANT: fallback to 0 instead of raising
+    return 0
 
 def add_uncertainty_features(df_in: pd.DataFrame,
                              keep_asymmetric: bool = False,
@@ -154,7 +167,7 @@ def add_uncertainty_features(df_in: pd.DataFrame,
     return df_out
 
 def preprocess_uploaded_csv(content: bytes) -> pd.DataFrame:
-    # 1) detect header
+    # 1) detect header (tolerant)
     hdr = detect_header_row_from_bytes(content, header_identifiers)
     text = content.decode("utf-8", errors="ignore")
     df = pd.read_csv(io.StringIO(text), header=hdr)
@@ -163,20 +176,20 @@ def preprocess_uploaded_csv(content: bytes) -> pd.DataFrame:
     df.dropna(how="all", inplace=True)
     df.dropna(axis=1, how="all", inplace=True)
 
-    # 3) drop known columns
+    # 3) drop obvious IDs/refs if present
     df = df.drop(columns=cols_to_drop, errors="ignore")
 
     # 4) build uncertainty features
     df = add_uncertainty_features(df, keep_asymmetric=keep_asymmetric, min_den=min_den)
 
-    # 5) remove label col at inference
+    # 5) remove label at inference if present
     if label_col in df.columns:
         df = df.drop(columns=[label_col])
 
-    # 6) numeric coercion (imputer/scaler live in the pipeline)
+    # 6) numeric coercion (imputer/scaler live in pipeline)
     df = df.apply(pd.to_numeric, errors="coerce")
 
-    # 7) align to training order (if we have it)
+    # 7) align to training feature order (if provided)
     if TRAIN_FEATURES is not None:
         for col in TRAIN_FEATURES:
             if col not in df.columns:
@@ -190,7 +203,7 @@ def preprocess_uploaded_csv(content: bytes) -> pd.DataFrame:
 # =========================
 # FastAPI app
 # =========================
-app = FastAPI(title="KOI SVM Inference API", version="1.0.0")
+app = FastAPI(title="TESS (TOI) Inference API", version="1.0.0")
 
 # CORS (tighten allow_origins in production)
 app.add_middleware(
@@ -201,7 +214,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Helpful root so you don't see 404 at "/"
+# Root -> Swagger
 @app.get("/", include_in_schema=False)
 def root():
     return RedirectResponse(url="/docs")
@@ -236,16 +249,6 @@ async def predict(file: UploadFile = File(...)) -> Dict[str, Any]:
         pred_idx = pipe.predict(X).tolist()
         pred_labels = [class_names[i] for i in pred_idx] if class_names is not None else pred_idx
 
-        # proba intentionally omitted to keep response compact
-        # if you want it back, uncomment below:
-        # proba = None
-        # if hasattr(pipe[-1], "predict_proba"):
-        #     try:
-        #         proba = pipe.predict_proba(X).tolist()
-        #     except Exception:
-        #         proba = None
-
-        # compact summary for quick verification
         u, c = np.unique(pred_idx, return_counts=True)
         counts_by_class = {
             (class_names[i] if class_names is not None else int(i)): int(n)
@@ -254,10 +257,9 @@ async def predict(file: UploadFile = File(...)) -> Dict[str, Any]:
 
         return {
             "n_rows": int(X.shape[0]),
-            "pred_labels": pred_labels,   # only labels
+            "pred_labels": pred_labels,
             "class_names": class_names,
             "counts_by_class": counts_by_class
-            # "proba": proba
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Inference error: {e}")
@@ -293,7 +295,7 @@ async def predict_csv(file: UploadFile = File(...)) -> Dict[str, str]:
 @app.post("/evaluate")
 async def evaluate(file: UploadFile = File(...)) -> Dict[str, Any]:
     """
-    Evaluate model on a CSV that INCLUDES the ground-truth label column (koi_pdisposition).
+    Evaluate model on a CSV that INCLUDES the ground-truth label column (tfopwg_disposition).
     Returns aggregate metrics + confusion matrix + classification report.
     """
     if not file.filename.lower().endswith(".csv"):
@@ -301,7 +303,7 @@ async def evaluate(file: UploadFile = File(...)) -> Dict[str, Any]:
 
     content = await file.read()
 
-    # Read raw to extract y_true BEFORE preprocess (preprocess drops label)
+    # Read raw first to extract ground-truth labels
     try:
         hdr = detect_header_row_from_bytes(content, header_identifiers)
         raw_df = pd.read_csv(io.StringIO(content.decode("utf-8", errors="ignore")), header=hdr)
@@ -311,24 +313,21 @@ async def evaluate(file: UploadFile = File(...)) -> Dict[str, Any]:
     if label_col not in raw_df.columns:
         raise HTTPException(status_code=400, detail=f"Label column '{label_col}' not found in the uploaded CSV.")
 
-    # Build features the same way as /predict
+    # Build the features like /predict (drops label)
     try:
-        X = preprocess_uploaded_csv(content)  # this drops label internally, as intended
+        X = preprocess_uploaded_csv(content)
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Preprocessing error: {e}")
 
-    # Predictions
     try:
         y_pred_idx = pipe.predict(X)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Inference error: {e}")
 
-    # Prepare y_true as indices that match the model's class ordering
     y_true_raw = raw_df[label_col].astype(str)
     mask = y_true_raw.notna()
 
     if le is not None and class_names is not None:
-        # Map string labels -> indices using the saved encoder
         mapping = {lbl: i for i, lbl in enumerate(class_names)}
         y_true_idx = y_true_raw.map(mapping)
         mask = mask & y_true_idx.notna()
@@ -337,12 +336,10 @@ async def evaluate(file: UploadFile = File(...)) -> Dict[str, Any]:
         except Exception:
             raise HTTPException(status_code=400, detail="Ground-truth labels could not be mapped to known classes.")
     else:
-        # Fallback: try to interpret labels as numeric indices already
         y_true_idx = pd.to_numeric(y_true_raw, errors="coerce")
         mask = mask & y_true_idx.notna()
         y_true_idx = y_true_idx.astype(int).to_numpy()
 
-    # Align predictions to the same valid mask (drop rows with unknown/missing GT)
     y_pred_idx = np.asarray(y_pred_idx)
     if y_pred_idx.shape[0] != mask.shape[0]:
         raise HTTPException(status_code=500, detail="Shape mismatch between predictions and labels after preprocessing.")
@@ -353,9 +350,8 @@ async def evaluate(file: UploadFile = File(...)) -> Dict[str, Any]:
     if y_true_eval.size == 0:
         raise HTTPException(status_code=400, detail="No valid rows with recognizable ground-truth labels to evaluate.")
 
-    # Metrics
-    acc = float(accuracy_score(y_true_eval, y_pred_eval))
-    f1m = float(f1_score(y_true_eval, y_pred_eval, average="macro"))
+    acc  = float(accuracy_score(y_true_eval, y_pred_eval))
+    f1m  = float(f1_score(y_true_eval, y_pred_eval, average="macro"))
     bacc = float(balanced_accuracy_score(y_true_eval, y_pred_eval))
 
     labels_range = None
@@ -364,14 +360,12 @@ async def evaluate(file: UploadFile = File(...)) -> Dict[str, Any]:
         labels_range = list(range(len(class_names)))
         target_names = class_names
 
-    # Confusion matrix (ensure consistent label order if available)
     cm = confusion_matrix(
         y_true_eval, y_pred_eval, labels=labels_range
     ).tolist() if labels_range is not None else confusion_matrix(
         y_true_eval, y_pred_eval
     ).tolist()
 
-    # Classification report as a dict for easy JSON
     cr = classification_report(
         y_true_eval,
         y_pred_eval,
@@ -381,14 +375,13 @@ async def evaluate(file: UploadFile = File(...)) -> Dict[str, Any]:
         zero_division=0
     )
 
-    # Add a compact prediction summary (use evaluated rows only)
     u, c = np.unique(y_pred_eval, return_counts=True)
     counts_by_class = {
         (class_names[i] if class_names is not None else int(i)): int(n)
         for i, n in zip(u, c)
     }
 
-    resp = {
+    return {
         "evaluated_rows": int(y_true_eval.shape[0]),
         "accuracy": acc,
         "macro_f1": f1m,
@@ -397,8 +390,7 @@ async def evaluate(file: UploadFile = File(...)) -> Dict[str, Any]:
             "labels": class_names if class_names is not None else None,
             "matrix": cm
         },
-        "classification_repor/Users/saadkhan/Downloads/best_pipeline.joblib /Users/saadkhan/Downloads/label_encoder.joblib /Users/saadkhan/Downloads/feature_names.jsont": cr,
+        "classification_report": cr,
         "class_names": class_names,
         "prediction_counts": counts_by_class
     }
-    return resp
