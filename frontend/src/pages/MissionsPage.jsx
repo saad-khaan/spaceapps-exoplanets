@@ -7,7 +7,7 @@ export default function MissionsPage() {
   const navigate = useNavigate();
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-b from-black via-gray-900 to-black text-white px-6 pt-24">
+    <div className="relative min-h-screen flex flex-col items-center justify-start bg-gradient-to-b from-black via-gray-900 to-black text-white px-6 pt-36 md:pt-40 pb-16 overflow-hidden">
 
       {/* === NASA Background === */}
       <div
@@ -33,24 +33,24 @@ export default function MissionsPage() {
       </div>
 
       {/* === Main Page Content === */}
-      <div className="relative z-10 flex flex-col items-center justify-center">
+      <div className="relative z-10 flex flex-col items-center justify-center text-center px-4 md:px-8">
 
-        {/* === Header Above Earth (moved up) === */}
+        {/* === Header Above Earth === */}
         <motion.p
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, ease: "easeOut" }}
-          className="mt-[-60px] text-3xl md:text-4xl font-semibold text-blue-300 mb-20 text-center drop-shadow-[0_0_10px_#00bfff]"
+          className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-semibold text-blue-300 mb-12 sm:mb-16 drop-shadow-[0_0_10px_#00bfff] leading-tight"
         >
           Select a NASA mission to test its exoplanet dataset
         </motion.p>
 
-        {/* === Rotating Earth (bigger size) === */}
-        <div className="relative flex items-center justify-center mt-12">
+        {/* === Rotating Earth (reduced size & responsive) === */}
+        <div className="relative flex items-center justify-center mt-4 sm:mt-8 md:mt-12">
           <motion.img
             src="https://upload.wikimedia.org/wikipedia/commons/9/97/The_Earth_seen_from_Apollo_17.jpg"
             alt="Planet Earth"
-            className="w-[520px] h-[520px] md:w-[600px] md:h-[600px] rounded-full shadow-[0_0_90px_#00bfff] border-4 border-blue-500"
+            className="w-[220px] sm:w-[320px] md:w-[400px] lg:w-[460px] aspect-square rounded-full shadow-[0_0_70px_#00bfff] border-4 border-blue-500"
             animate={{ rotate: 360 }}
             transition={{
               repeat: Infinity,
@@ -63,7 +63,7 @@ export default function MissionsPage() {
           <div
             className="absolute flex flex-col items-center"
             style={{
-              top: "-60px",
+              top: "-40px",
               left: "50%",
               transform: "translateX(-50%)",
             }}
@@ -76,7 +76,7 @@ export default function MissionsPage() {
             >
               <motion.button
                 onClick={() => navigate("/upload/tess")}
-                className="bg-blue-600 hover:bg-blue-700 px-7 py-3 rounded-full text-lg font-semibold shadow-[0_0_25px_#00bfff] transition-transform hover:scale-110"
+                className="bg-blue-600 hover:bg-blue-700 px-5 sm:px-7 py-2 sm:py-3 rounded-full text-base sm:text-lg font-semibold shadow-[0_0_25px_#00bfff] transition-transform hover:scale-110"
               >
                 TESS
               </motion.button>
@@ -87,7 +87,7 @@ export default function MissionsPage() {
                   hovered: { opacity: 1, x: 20, scale: 1 },
                 }}
                 transition={{ duration: 0.25 }}
-                className="absolute left-full ml-4 bg-gray-900/90 border border-blue-500 text-sm text-blue-200 px-4 py-2 rounded-lg w-64 text-left shadow-[0_0_25px_#00bfff] backdrop-blur-sm pointer-events-none"
+                className="absolute left-full ml-4 bg-gray-900/90 border border-blue-500 text-xs sm:text-sm text-blue-200 px-3 sm:px-4 py-2 rounded-lg w-56 sm:w-64 text-left shadow-[0_0_25px_#00bfff] backdrop-blur-sm pointer-events-none"
               >
                 <strong>TESS (Transiting Exoplanet Survey Satellite):</strong><br />
                 Observes nearby stars to detect exoplanets by measuring small dips in brightness.
@@ -99,8 +99,8 @@ export default function MissionsPage() {
           <div
             className="absolute flex flex-col items-center"
             style={{
-              bottom: "-20px",
-              left: "calc(35% - 130px)",
+              bottom: "-10px",
+              left: "calc(25% - 80px)",
             }}
           >
             <motion.div
@@ -111,7 +111,7 @@ export default function MissionsPage() {
             >
               <motion.button
                 onClick={() => navigate("/upload/k2")}
-                className="bg-purple-600 hover:bg-purple-700 px-7 py-3 rounded-full text-lg font-semibold shadow-[0_0_25px_#b266ff] transition-transform hover:scale-110"
+                className="bg-purple-600 hover:bg-purple-700 px-5 sm:px-7 py-2 sm:py-3 rounded-full text-base sm:text-lg font-semibold shadow-[0_0_25px_#b266ff] transition-transform hover:scale-110"
               >
                 K2
               </motion.button>
@@ -122,7 +122,7 @@ export default function MissionsPage() {
                   hovered: { opacity: 1, x: -20, scale: 1 },
                 }}
                 transition={{ duration: 0.25 }}
-                className="absolute right-full mr-4 bg-gray-900/90 border border-purple-500 text-sm text-purple-200 px-4 py-2 rounded-lg w-64 text-left shadow-[0_0_25px_#b266ff] backdrop-blur-sm pointer-events-none"
+                className="absolute right-full mr-4 bg-gray-900/90 border border-purple-500 text-xs sm:text-sm text-purple-200 px-3 sm:px-4 py-2 rounded-lg w-56 sm:w-64 text-left shadow-[0_0_25px_#b266ff] backdrop-blur-sm pointer-events-none"
               >
                 <strong>K2 Mission:</strong><br />
                 A reoriented Kepler mission studying exoplanets, galaxies, and stellar activity.
@@ -134,8 +134,8 @@ export default function MissionsPage() {
           <div
             className="absolute flex flex-col items-center"
             style={{
-              bottom: "-20px",
-              right: "calc(35% - 130px)",
+              bottom: "-10px",
+              right: "calc(25% - 80px)",
             }}
           >
             <motion.div
@@ -146,7 +146,7 @@ export default function MissionsPage() {
             >
               <motion.button
                 onClick={() => navigate("/upload/koi")}
-                className="bg-pink-600 hover:bg-pink-700 px-7 py-3 rounded-full text-lg font-semibold shadow-[0_0_25px_#ff3fa4] transition-transform hover:scale-110"
+                className="bg-pink-600 hover:bg-pink-700 px-5 sm:px-7 py-2 sm:py-3 rounded-full text-base sm:text-lg font-semibold shadow-[0_0_25px_#ff3fa4] transition-transform hover:scale-110"
               >
                 KOI
               </motion.button>
@@ -157,7 +157,7 @@ export default function MissionsPage() {
                   hovered: { opacity: 1, x: 20, scale: 1 },
                 }}
                 transition={{ duration: 0.25 }}
-                className="absolute left-full ml-4 bg-gray-900/90 border border-pink-500 text-sm text-pink-200 px-4 py-2 rounded-lg w-64 text-left shadow-[0_0_25px_#ff3fa4] backdrop-blur-sm pointer-events-none"
+                className="absolute left-full ml-4 bg-gray-900/90 border border-pink-500 text-xs sm:text-sm text-pink-200 px-3 sm:px-4 py-2 rounded-lg w-56 sm:w-64 text-left shadow-[0_0_25px_#ff3fa4] backdrop-blur-sm pointer-events-none"
               >
                 <strong>KOI (Kepler Object of Interest):</strong><br />
                 Catalogues potential exoplanets detected by Kepler via light-curve variations.

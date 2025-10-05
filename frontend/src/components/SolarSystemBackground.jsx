@@ -3,12 +3,6 @@ import { motion } from "framer-motion";
 export default function SolarSystemBackground() {
   return (
     <div className="absolute inset-0 flex items-center justify-center overflow-hidden">
-      {/* === Glowing Sun at Center === */}
-      <motion.div
-        className="absolute w-32 h-32 bg-yellow-400 rounded-full blur-3xl opacity-30"
-        animate={{ scale: [1, 1.1, 1] }}
-        transition={{ repeat: Infinity, duration: 5, ease: "easeInOut" }}
-      />
 
       {/* === Orbit 1 === */}
       <motion.div

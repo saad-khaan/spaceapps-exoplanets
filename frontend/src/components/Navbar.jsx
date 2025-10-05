@@ -6,24 +6,28 @@ export default function Navbar() {
 
   const isActive = (path) =>
     location.pathname === path
-      ? "text-yellow-400 font-semibold border-b-2 border-yellow-400"
-      : "text-white hover:text-yellow-300";
+      ? "text-[#E6EF4C] font-semibold border-b-2 border-[#E6EF4C] drop-shadow-[0_0_10px_#E6EF4C]"
+      : "text-white hover:text-[#E6EF4C] hover:drop-shadow-[0_0_6px_#E6EF4C]";
 
   return (
-    <nav className="w-full fixed top-0 bg-transparent shadow-none backdrop-filter-none border-none text-white z-50 pointer-events-auto">
-      <div className="w-full py-2 flex items-center justify-between">
+    <nav className="w-full fixed top-0 bg-transparent shadow-none border-none text-white z-50 pointer-events-auto">
+      <div className="w-full py-3 flex items-center justify-between">
         
-        {/* === Left Side - NASA Logo === */}
-        <Link
-          to="/"
-          className="flex items-center space-x-3 ml-4"
-        >
-          <img
-            src={nasaLogo}
-            alt="NASA Space Apps Logo"
-            className="w-36 h-36 object-contain"
-          />
-        </Link>
+        {/* === Left Side - NASA Logo + Title === */}
+        <div className="flex items-center space-x-4 ml-4">
+          <Link to="/" className="flex items-center space-x-3">
+            <img
+              src={nasaLogo}
+              alt="NASA Space Apps Logo"
+              className="w-36 h-36 object-contain drop-shadow-[0_0_12px_#E6EF4C]"
+            />
+          </Link>
+
+          {/* Title beside the logo */}
+          <h1 className="text-2xl font-bold text-[#E6EF4C] drop-shadow-[0_0_10px_#E6EF4C] tracking-wide">
+            A World Away: Hunting for Exoplanets with AI
+          </h1>
+        </div>
 
         {/* === Center Nav Links === */}
         <div className="flex space-x-10 text-lg font-medium mr-12">
@@ -36,6 +40,14 @@ export default function Navbar() {
           <Link to="/about" className={isActive("/about")}>
             About Us
           </Link>
+          <a
+            href="https://www.spaceappschallenge.org/2025/challenges/a-world-away-hunting-for-exoplanets-with-ai/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-white hover:text-[#E6EF4C] hover:drop-shadow-[0_0_6px_#E6EF4C]"
+          >
+            Learn More
+          </a>
         </div>
       </div>
     </nav>

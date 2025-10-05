@@ -1,0 +1,214 @@
+{
+  "model_name": "K2 RandomForest",
+  "version": "2025.10.05",
+  "dataset_name": "NASA K2 Exoplanet Candidates/Confirmed",
+  "trained_on": "2025-10-05",
+  "classes": [
+    "CANDIDATE",
+    "CONFIRMED",
+    "FALSE POSITIVE",
+    "REFUTED"
+  ],
+  "headlines": {
+    "accuracy": 0.9176029962546817,
+    "macro_f1": 0.6930614375097202,
+    "balanced_accuracy": 0.72268356867352
+  },
+  "cv": {
+    "n_splits": 5,
+    "accuracy_mean": 0.9116414781591263,
+    "accuracy_std": 0.01391279598022188,
+    "macro_f1_mean": 0.7741227731183382,
+    "macro_f1_std": 0.041619768891910235,
+    "balanced_accuracy_mean": 0.7752399362704382,
+    "balanced_accuracy_std": 0.0609678375388247
+  },
+  "test_confusion_matrix": {
+    "format": "rows=true, cols=pred, label_order=classes",
+    "labels": [
+      "CANDIDATE",
+      "CONFIRMED",
+      "FALSE POSITIVE",
+      "REFUTED"
+    ],
+    "matrix": [
+      [
+        224,
+        9,
+        40,
+        2
+      ],
+      [
+        1,
+        461,
+        1,
+        0
+      ],
+      [
+        8,
+        1,
+        49,
+        1
+      ],
+      [
+        2,
+        1,
+        0,
+        1
+      ]
+    ]
+  },
+  "classification_report": {
+    "CANDIDATE": {
+      "precision": 0.9531914893617022,
+      "recall": 0.8145454545454546,
+      "f1-score": 0.8784313725490196,
+      "support": 275.0
+    },
+    "CONFIRMED": {
+      "precision": 0.9766949152542372,
+      "recall": 0.9956803455723542,
+      "f1-score": 0.986096256684492,
+      "support": 463.0
+    },
+    "FALSE POSITIVE": {
+      "precision": 0.5444444444444444,
+      "recall": 0.8305084745762712,
+      "f1-score": 0.6577181208053692,
+      "support": 59.0
+    },
+    "REFUTED": {
+      "precision": 0.25,
+      "recall": 0.25,
+      "f1-score": 0.25,
+      "support": 4.0
+    },
+    "accuracy": 0.9176029962546817,
+    "macro avg": {
+      "precision": 0.681082712265096,
+      "recall": 0.72268356867352,
+      "f1-score": 0.6930614375097202,
+      "support": 801.0
+    },
+    "weighted avg": {
+      "precision": 0.9331580868407019,
+      "recall": 0.9176029962546817,
+      "f1-score": 0.9212691178819188,
+      "support": 801.0
+    }
+  },
+  "data_summary": {
+    "train_class_distribution": {
+      "CANDIDATE": 0.343116,
+      "CONFIRMED": 0.578208,
+      "FALSE POSITIVE": 0.073057,
+      "REFUTED": 0.00562
+    },
+    "test_class_distribution": {
+      "CANDIDATE": 0.343321,
+      "CONFIRMED": 0.578027,
+      "FALSE POSITIVE": 0.073658,
+      "REFUTED": 0.004994
+    },
+    "n_features": 92,
+    "feature_names_hash": "sha256:ab3dce00248d8373dc2a1ffff49b2bf1c0b4897ecaf6c183cdc849100620956b"
+  },
+  "top_features": [
+    {
+      "name": "sy_pnum",
+      "importance": 0.16588345683984543
+    },
+    {
+      "name": "soltype_Published Confirmed",
+      "importance": 0.047154752103360564
+    },
+    {
+      "name": "soltype_Published Candidate",
+      "importance": 0.043430060186033015
+    },
+    {
+      "name": "disc_year",
+      "importance": 0.04155483175715724
+    },
+    {
+      "name": "sy_gaiamagerr1",
+      "importance": 0.039813104861645625
+    },
+    {
+      "name": "pl_orbper",
+      "importance": 0.037028609263721445
+    },
+    {
+      "name": "sy_gaiamagerr2",
+      "importance": 0.036892046269848815
+    },
+    {
+      "name": "sy_disterr2",
+      "importance": 0.033845776144688346
+    },
+    {
+      "name": "sy_disterr1",
+      "importance": 0.0320001257633286
+    },
+    {
+      "name": "sy_dist",
+      "importance": 0.02830309523536543
+    },
+    {
+      "name": "pl_radj_was_missing",
+      "importance": 0.023937563968419576
+    },
+    {
+      "name": "pl_rade",
+      "importance": 0.02229198750766323
+    },
+    {
+      "name": "pl_radj",
+      "importance": 0.021251528316425995
+    },
+    {
+      "name": "pl_orbpererr1_was_missing",
+      "importance": 0.020079251038624363
+    },
+    {
+      "name": "pl_rade_was_missing",
+      "importance": 0.01948481854000994
+    },
+    {
+      "name": "pl_orbpererr2_was_missing",
+      "importance": 0.019217374037787168
+    },
+    {
+      "name": "pl_radjerr1",
+      "importance": 0.017329081957198313
+    },
+    {
+      "name": "pl_radeerr2",
+      "importance": 0.017198523913666126
+    },
+    {
+      "name": "pl_radjerr2",
+      "importance": 0.01656010882285175
+    },
+    {
+      "name": "sy_vmagerr2",
+      "importance": 0.01561819444523905
+    }
+  ],
+  "preprocessing": "Header auto-detect; drop empty rows/cols; drop K2 ID/coord/date/flag and *_lim columns; create relative-error features from *_err1/*_err2; one-hot specified categoricals; numeric coercion; drop degenerate features; drop features with >70% missing; add *_was_missing flags; SimpleImputer(median) inside pipeline.",
+  "model": {
+    "estimator": "RandomForestClassifier",
+    "n_estimators": 500,
+    "max_depth": 5,
+    "min_samples_split": 5,
+    "class_weight": "balanced_subsample",
+    "n_jobs": -1,
+    "random_state": 42
+  },
+  "limitations": "Performance depends on training distribution; feature set must match saved feature_names; feature importances are global (not per-instance); review low-confidence outputs.",
+  "artifacts": {
+    "pipeline_path": "k2_randomforest_pipeline.joblib",
+    "label_encoder_path": "k2_randomforest_label_encoder.joblib",
+    "feature_names_path": "feature_names.json"
+  }
+}
