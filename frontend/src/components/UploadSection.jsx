@@ -15,11 +15,19 @@ export default function UploadSection() {
     console.log("Planet Radius:", planetRadius);
     console.log("Orbital Days:", orbitalDays);
     console.log("Transit Period:", transitPeriod);
-    alert("Data submitted successfully 🚀");
+    alert("Data submitted successfully");
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-b from-black via-gray-900 to-black text-white px-6">
+    <div
+      className="
+        min-h-screen 
+        flex flex-col items-center justify-start
+        bg-gradient-to-b from-black via-gray-900 to-black 
+        text-white px-6 
+        pt-44 pb-16
+      "
+    >
       {/* === Page Title === */}
       <h1 className="text-4xl font-bold text-blue-400 mb-2 drop-shadow-[0_0_10px_#00bfff]">
         Upload Dataset
