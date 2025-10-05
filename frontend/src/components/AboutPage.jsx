@@ -2,7 +2,7 @@ export default function AboutPage() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-black via-gray-900 to-black text-white flex flex-col items-center justify-center px-6 py-12">
       {/* === Page Heading === */}
-      <h1 className="text-5xl font-bold mb-12 text-center">Our Team</h1>
+      <h1 className="text-5xl font-bold mb-12 text-center">Meet the Steller Detectives Team</h1>
       <p className="max-w-2xl text-center text-gray-400 mb-16">
         We are a passionate group of space enthusiasts and developers working
         together on the NASA Space Apps Challenge to explore exoplanets and
