@@ -1,320 +1,404 @@
-# backend/app/main.py
-# Inference + evaluation API for a pre-trained sklearn pipeline.
-# Robust CSV reader (header detection + delimiter sniffing) and
-# column normalization so "koi_pdisposition" is always found.
+# main.py
+# FastAPI inference server for your pretrained KOI SVM pipeline
+# - Loads pipeline + LabelEncoder + training feature order
+# - Reuses your header detection + uncertainty-feature preprocessing
+# - Adds startup diagnostics and a helpful /health endpoint
+# - Adds / root redirect to /docs so you don't see 404
 
+import os
 import io
 import csv
-import unicodedata
-from pathlib import Path
-from typing import Optional, List
+import json
+from typing import List, Optional, Dict, Any
 
 import joblib
 import numpy as np
 import pandas as pd
-from fastapi import FastAPI, File, UploadFile, HTTPException
+import sklearn
+import warnings
+from sklearn.metrics import (
+    accuracy_score, f1_score, balanced_accuracy_score,
+    classification_report, confusion_matrix
+)
+
+from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from sklearn.metrics import accuracy_score, f1_score, classification_report, confusion_matrix
+from fastapi.responses import RedirectResponse
 
-# ────────────────────────────────────────────────────────────────────────────────
-# App & CORS
-# ────────────────────────────────────────────────────────────────────────────────
-app = FastAPI(title="Exoplanet Inference API", version="1.1")
+# =========================
+# Training-time constants (must match your notebook)
+# =========================
+label_col       = "koi_pdisposition"
+keep_asymmetric = False
+min_den         = 1e-12
 
+cols_to_drop = [
+    "kepid", "kepoi_name", "kepler_name",
+    "koi_disposition", "koi_score",
+    "koi_fpflag_nt", "koi_fpflag_ss", "koi_fpflag_co", "koi_fpflag_ec",
+    "koi_tce_plnt_num", "koi_tce_delivname"
+]
+
+header_identifiers = ["koi_period", "koi_depth", "koi_duration", label_col]
+
+# artifact paths (relative to project root)
+PIPE_PATH = "artifacts/best_pipeline.joblib"
+LE_PATH   = "artifacts/label_encoder.joblib"
+FEATURE_NAMES_JSON = "artifacts/feature_names.json"
+
+# Optional: warn if runtime sklearn mismatches your training version
+TRAINED_SKLEARN = "1.7.2"   # set this to the version you used in Colab when saving
+if sklearn.__version__ != TRAINED_SKLEARN:
+    warnings.warn(
+        f"Model trained with scikit-learn {TRAINED_SKLEARN}, "
+        f"but runtime has {sklearn.__version__}. Align to avoid issues."
+    )
+
+# =========================
+# Startup diagnostics
+# =========================
+print("[startup] sklearn version:", sklearn.__version__)
+print("[startup] cwd:", os.getcwd())
+print("[startup] artifacts abs path:", os.path.abspath("artifacts"))
+for p in ["artifacts", PIPE_PATH, LE_PATH, FEATURE_NAMES_JSON]:
+    print(f"[startup] exists({p}) ->", os.path.exists(p))
+
+# =========================
+# Load artifacts
+# =========================
+try:
+    pipe = joblib.load(PIPE_PATH)
+    print("[startup] pipeline loaded OK")
+except Exception as e:
+    raise RuntimeError(f"Could not load pipeline from {PIPE_PATH}: {e}")
+
+try:
+    le = joblib.load(LE_PATH)
+    print("[startup] loaded label_encoder type:", type(le))
+    if hasattr(le, "classes_"):
+        class_names = list(le.classes_)
+        print("[startup] label_encoder classes:", class_names)
+    else:
+        print("[startup] label_encoder has no 'classes_' attribute")
+        class_names = None
+except Exception as e:
+    le = None
+    class_names = None
+    print("[startup] failed to load label_encoder:", repr(e))
+
+def load_training_feature_names() -> Optional[List[str]]:
+    try:
+        with open(FEATURE_NAMES_JSON, "r", encoding="utf-8") as f:
+            names = json.load(f)
+            if isinstance(names, list) and all(isinstance(c, str) for c in names):
+                print(f"[startup] loaded {len(names)} training feature names")
+                return names
+    except Exception as e:
+        print("[startup] feature_names.json not loaded:", repr(e))
+    return None
+
+TRAIN_FEATURES = load_training_feature_names()
+
+# =========================
+# Preprocessing utils (match your notebook)
+# =========================
+def detect_header_row_from_bytes(content: bytes,
+                                 identifiers: List[str],
+                                 max_lines: int = 200) -> int:
+    text = content.decode("utf-8", errors="ignore")
+    reader = csv.reader(io.StringIO(text))
+    for i, row in enumerate(reader):
+        if i >= max_lines:
+            break
+        norm = [str(c).strip().lower() for c in row]
+        for token in identifiers:
+            if str(token).strip().lower() in norm:
+                return i
+    raise ValueError("Could not detect header. Update header_identifiers if needed.")
+
+def add_uncertainty_features(df_in: pd.DataFrame,
+                             keep_asymmetric: bool = False,
+                             min_den: float = 1e-12) -> pd.DataFrame:
+    df_out = df_in.copy()
+    err1_cols = [c for c in df_out.columns if c.endswith("_err1")]
+    base_to_errs = {}
+    for e1 in err1_cols:
+        base = e1[:-5]
+        e2 = f"{base}_err2"
+        if e2 in df_out.columns:
+            base_to_errs[base] = (e1, e2)
+
+    new_cols = {}
+    for base, (e1, e2) in base_to_errs.items():
+        if base not in df_out.columns:
+            continue
+        val  = pd.to_numeric(df_out[base], errors="coerce")
+        err1 = pd.to_numeric(df_out[e1], errors="coerce").abs()
+        err2 = pd.to_numeric(df_out[e2], errors="coerce").abs()
+
+        abs_err_mean = (err1 + err2) / 2.0
+        rel_err = abs_err_mean / np.maximum(np.abs(val), min_den)
+        new_cols[f"{base}_rel_error"] = rel_err
+
+        if keep_asymmetric:
+            new_cols[f"{base}_rel_err_upper"] = err1 / np.maximum(np.abs(val), min_den)
+            new_cols[f"{base}_rel_err_lower"] = err2 / np.maximum(np.abs(val), min_den)
+
+    for k, v in new_cols.items():
+        df_out[k] = v
+
+    drop_cols = []
+    for base, (e1, e2) in base_to_errs.items():
+        drop_cols.extend([e1, e2])
+    df_out = df_out.drop(columns=drop_cols, errors="ignore")
+    return df_out
+
+def preprocess_uploaded_csv(content: bytes) -> pd.DataFrame:
+    # 1) detect header
+    hdr = detect_header_row_from_bytes(content, header_identifiers)
+    text = content.decode("utf-8", errors="ignore")
+    df = pd.read_csv(io.StringIO(text), header=hdr)
+
+    # 2) drop empty rows/cols
+    df.dropna(how="all", inplace=True)
+    df.dropna(axis=1, how="all", inplace=True)
+
+    # 3) drop known columns
+    df = df.drop(columns=cols_to_drop, errors="ignore")
+
+    # 4) build uncertainty features
+    df = add_uncertainty_features(df, keep_asymmetric=keep_asymmetric, min_den=min_den)
+
+    # 5) remove label col at inference
+    if label_col in df.columns:
+        df = df.drop(columns=[label_col])
+
+    # 6) numeric coercion (imputer/scaler live in the pipeline)
+    df = df.apply(pd.to_numeric, errors="coerce")
+
+    # 7) align to training order (if we have it)
+    if TRAIN_FEATURES is not None:
+        for col in TRAIN_FEATURES:
+            if col not in df.columns:
+                df[col] = np.nan
+        extra = [c for c in df.columns if c not in TRAIN_FEATURES]
+        if extra:
+            df = df.drop(columns=extra)
+        df = df[TRAIN_FEATURES]
+    return df
+
+# =========================
+# FastAPI app
+# =========================
+app = FastAPI(title="KOI SVM Inference API", version="1.0.0")
+
+# CORS (tighten allow_origins in production)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],            # relax for local dev; restrict in prod
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# ────────────────────────────────────────────────────────────────────────────────
-# Model locations (pre-trained)
-# ────────────────────────────────────────────────────────────────────────────────
-MODEL_DIR     = Path(__file__).resolve().parent / "model"
-PIPELINE_PATH = MODEL_DIR / "best_pipeline.joblib"
-ENCODER_PATH  = MODEL_DIR / "label_encoder.joblib"
-_PIPELINE = None
-_ENCODER  = None  # optional sklearn LabelEncoder
-
-# ────────────────────────────────────────────────────────────────────────────────
-# CSV helpers: header detection, delimiter sniffing, normalization
-# ────────────────────────────────────────────────────────────────────────────────
-def detect_header_row_from_bytes(content: bytes, tokens: List[str], max_lines: int = 200) -> int:
-    """
-    Heuristically find the header row by scanning the first `max_lines` lines
-    and checking if any of the `tokens` is present (case/space-insensitive).
-    """
-    text = content.decode("utf-8", errors="replace")
-    sio = io.StringIO(text)
-    reader = csv.reader(sio)
-    for i, row in enumerate(reader):
-        if i >= max_lines:
-            break
-        lower = [normalize_name(c) for c in row]
-        for t in tokens:
-            if normalize_name(t) in lower:
-                return i
-    return 0
-
-def tolerant_read_csv(content: bytes, header_tokens: Optional[List[str]] = None) -> pd.DataFrame:
-    """
-    Read CSV bytes robustly:
-      1) detect header row by tokens,
-      2) sniff delimiter with csv.Sniffer (fallbacks: , \t ; |),
-      3) read with pandas using (header=hdr, sep=sep) and skip bad lines.
-    If still 1 column, brute-force common separators.
-    """
-    text = content.decode("utf-8", errors="replace")
-    sample = text[:10000]
-    hdr = detect_header_row_from_bytes(
-        content,
-        header_tokens or ["koi_pdisposition", "tfopwg_disposition", "disposition",
-                          "koi_period", "pl_orbper", "pl_rade", "st_teff"],
-        max_lines=200,
-    )
-    # sniff delimiter
-    try:
-        dialect = csv.Sniffer().sniff(sample, delimiters=",;\t|")
-        sep = dialect.delimiter
-    except Exception:
-        if "," in sample:
-            sep = ","
-        elif "\t" in sample:
-            sep = "\t"
-        elif ";" in sample:
-            sep = ";"
-        elif "|" in sample:
-            sep = "|"
-        else:
-            sep = ","
-
-    df = pd.read_csv(
-        io.BytesIO(content),
-        engine="python",
-        sep=sep,
-        header=hdr,
-        on_bad_lines="skip",
-    )
-
-    # if still 1 column, brute-force try common separators
-    if df.shape[1] == 1:
-        for alt in [",", "\t", ";", "|"]:
-            try:
-                df2 = pd.read_csv(
-                    io.BytesIO(content),
-                    engine="python",
-                    sep=alt,
-                    header=hdr,
-                    on_bad_lines="skip",
-                )
-                if df2.shape[1] > 1:
-                    df = df2
-                    break
-            except Exception:
-                pass
-
-    return df
-
-def _clean_unicode_spaces(s: str) -> str:
-    # collapse any Unicode Zs (space separators) into ASCII spaces
-    return "".join(" " if unicodedata.category(ch) == "Zs" else ch for ch in s)
-
-def normalize_name(s: str) -> str:
-    if s is None:
-        return ""
-    s = s.replace("\ufeff", "")  # strip BOM
-    s = _clean_unicode_spaces(s)
-    return s.strip().lower()
-
-def normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
-    df = df.copy()
-    df.columns = [normalize_name(c) for c in df.columns]
-    return df
-
-def find_label_column(df: pd.DataFrame, label_col: Optional[str]) -> Optional[str]:
-    """
-    Return the actual column name (raw) matching label_col, or auto-detect
-    from common names if label_col is None. Comparison is normalized.
-    """
-    norm_map = {normalize_name(c): c for c in df.columns}
-    if label_col:
-        want = normalize_name(label_col)
-        if want in norm_map:
-            return norm_map[want]
-    for alias in ["koi_pdisposition", "tfopwg_disposition", "disposition"]:
-        want = normalize_name(alias)
-        if want in norm_map:
-            return norm_map[want]
-    return None
-
-# ────────────────────────────────────────────────────────────────────────────────
-# Model utilities
-# ────────────────────────────────────────────────────────────────────────────────
-def warmup():
-    """Load the pre-trained pipeline (+ optional label encoder) once."""
-    global _PIPELINE, _ENCODER
-    if _PIPELINE is None:
-        if not PIPELINE_PATH.exists():
-            raise RuntimeError(f"Missing model file: {PIPELINE_PATH}")
-        _PIPELINE = joblib.load(PIPELINE_PATH)
-        print("✅ Loaded pipeline:", PIPELINE_PATH)
-
-    if _ENCODER is None and ENCODER_PATH.exists():
-        _ENCODER = joblib.load(ENCODER_PATH)
-        print("✅ Loaded label encoder:", ENCODER_PATH)
-
-def align_features(df: pd.DataFrame, expected: Optional[List[str]]) -> pd.DataFrame:
-    """If pipeline exposes feature_names_in_, add missing cols as NaN and order them."""
-    if not expected:
-        return df
-    for col in expected:
-        if col not in df.columns:
-            df[col] = np.nan
-    return df[expected]
-
-# ────────────────────────────────────────────────────────────────────────────────
-# Routes
-# ────────────────────────────────────────────────────────────────────────────────
-@app.get("/")
+# Helpful root so you don't see 404 at "/"
+@app.get("/", include_in_schema=False)
 def root():
+    return RedirectResponse(url="/docs")
+
+@app.get("/health")
+def health():
     return {
         "status": "ok",
-        "endpoints": [
-            "POST /api/model/warmup",
-            "POST /api/model/peek-csv",
-            "POST /api/model/predict-csv?limit=100&proba=false",
-            "POST /api/model/evaluate-csv?label_col=koi_pdisposition",
-        ],
+        "cwd": os.getcwd(),
+        "sklearn": sklearn.__version__,
+        "encoder_loaded": class_names is not None,
+        "class_names": class_names,
+        "artifacts": {
+            "pipeline": os.path.exists(PIPE_PATH),
+            "label_encoder": os.path.exists(LE_PATH),
+            "feature_names": os.path.exists(FEATURE_NAMES_JSON),
+        },
     }
 
-@app.post("/api/model/warmup")
-def api_warmup():
-    warmup()
-    feats = getattr(_PIPELINE, "feature_names_in_", None)
-    return {"warmed": True, "expected_features": list(feats) if feats is not None else None}
-
-@app.post("/api/model/peek-csv")
-async def api_peek_csv(file: UploadFile = File(...), nrows: int = 1):
+@app.post("/predict")
+async def predict(file: UploadFile = File(...)) -> Dict[str, Any]:
+    if not file.filename.lower().endswith(".csv"):
+        raise HTTPException(status_code=400, detail="Please upload a .csv file.")
     content = await file.read()
-    if not content:
-        raise HTTPException(400, "Empty file.")
-    df = tolerant_read_csv(content)
-    df = normalize_columns(df)
-    return {
-        "columns": list(df.columns),
-        "sample": df.head(max(1, nrows)).to_dict(orient="records"),
-    }
 
-@app.post("/api/model/predict-csv")
-async def api_predict_csv(
-    file: UploadFile = File(...),
-    limit: int = 100,
-    proba: bool = False,
-):
-    """
-    Upload a *feature-only* CSV and get predictions.
-    If the CSV accidentally contains a label column, it is dropped automatically.
-    """
-    warmup()
-
-    content = await file.read()
-    if not content:
-        raise HTTPException(400, "Empty file.")
-
-    df = tolerant_read_csv(content)
-    df = normalize_columns(df)
-
-    # drop labels if present (case/space-insensitive)
-    for alias in ["koi_pdisposition", "tfopwg_disposition", "disposition"]:
-        raw = find_label_column(df, alias)
-        if raw:
-            df.drop(columns=[raw], inplace=True)
-
-    # feature alignment (if pipeline exposes names)
-    feats = getattr(_PIPELINE, "feature_names_in_", None)
-    df = align_features(df, list(feats) if feats is not None else None)
-
-    # predict
-    y_pred = _PIPELINE.predict(df)
-
-    # probability (optional)
-    scores = None
-    if proba and hasattr(_PIPELINE, "predict_proba"):
-        P = _PIPELINE.predict_proba(df)
-        scores = np.max(P, axis=1).astype(float)
-
-    # inverse-transform numeric labels (optional)
     try:
-        if _ENCODER is not None:
-            y_pred = _ENCODER.inverse_transform(y_pred)
-    except Exception:
-        pass
+        X = preprocess_uploaded_csv(content)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Preprocessing error: {e}")
 
-    n = len(df)
-    k = min(int(limit), n) if limit else n
-    if scores is not None:
-        preds = [{"label": str(y_pred[i]), "score": float(scores[i])} for i in range(k)]
+    try:
+        pred_idx = pipe.predict(X).tolist()
+        pred_labels = [class_names[i] for i in pred_idx] if class_names is not None else pred_idx
+
+        # proba intentionally omitted to keep response compact
+        # if you want it back, uncomment below:
+        # proba = None
+        # if hasattr(pipe[-1], "predict_proba"):
+        #     try:
+        #         proba = pipe.predict_proba(X).tolist()
+        #     except Exception:
+        #         proba = None
+
+        # compact summary for quick verification
+        u, c = np.unique(pred_idx, return_counts=True)
+        counts_by_class = {
+            (class_names[i] if class_names is not None else int(i)): int(n)
+            for i, n in zip(u, c)
+        }
+
+        return {
+            "n_rows": int(X.shape[0]),
+            "pred_labels": pred_labels,   # only labels
+            "class_names": class_names,
+            "counts_by_class": counts_by_class
+            # "proba": proba
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Inference error: {e}")
+
+@app.post("/predict_csv")
+async def predict_csv(file: UploadFile = File(...)) -> Dict[str, str]:
+    if not file.filename.lower().endswith(".csv"):
+        raise HTTPException(status_code=400, detail="Please upload a .csv file.")
+    content = await file.read()
+
+    hdr = detect_header_row_from_bytes(content, header_identifiers)
+    raw_df = pd.read_csv(io.StringIO(content.decode("utf-8", errors="ignore")), header=hdr)
+    X = preprocess_uploaded_csv(content)
+
+    pred_idx = pipe.predict(X).tolist()
+    pred_labels = [class_names[i] for i in pred_idx] if class_names is not None else pred_idx
+
+    out_df = raw_df.copy()
+    out_df["prediction"] = pred_labels
+
+    if hasattr(pipe[-1], "predict_proba"):
+        try:
+            P = pipe.predict_proba(X)
+            out_df["prediction_confidence"] = P.max(axis=1)
+        except Exception:
+            pass
+
+    buf = io.StringIO()
+    out_df.to_csv(buf, index=False)
+    data_url = "data:text/csv;charset=utf-8," + buf.getvalue()
+    return {"csv_data_url": data_url}
+
+@app.post("/evaluate")
+async def evaluate(file: UploadFile = File(...)) -> Dict[str, Any]:
+    """
+    Evaluate model on a CSV that INCLUDES the ground-truth label column (koi_pdisposition).
+    Returns aggregate metrics + confusion matrix + classification report.
+    """
+    if not file.filename.lower().endswith(".csv"):
+        raise HTTPException(status_code=400, detail="Please upload a .csv file.")
+
+    content = await file.read()
+
+    # Read raw to extract y_true BEFORE preprocess (preprocess drops label)
+    try:
+        hdr = detect_header_row_from_bytes(content, header_identifiers)
+        raw_df = pd.read_csv(io.StringIO(content.decode("utf-8", errors="ignore")), header=hdr)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"CSV read error: {e}")
+
+    if label_col not in raw_df.columns:
+        raise HTTPException(status_code=400, detail=f"Label column '{label_col}' not found in the uploaded CSV.")
+
+    # Build features the same way as /predict
+    try:
+        X = preprocess_uploaded_csv(content)  # this drops label internally, as intended
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Preprocessing error: {e}")
+
+    # Predictions
+    try:
+        y_pred_idx = pipe.predict(X)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Inference error: {e}")
+
+    # Prepare y_true as indices that match the model's class ordering
+    y_true_raw = raw_df[label_col].astype(str)
+    mask = y_true_raw.notna()
+
+    if le is not None and class_names is not None:
+        # Map string labels -> indices using the saved encoder
+        mapping = {lbl: i for i, lbl in enumerate(class_names)}
+        y_true_idx = y_true_raw.map(mapping)
+        mask = mask & y_true_idx.notna()
+        try:
+            y_true_idx = y_true_idx.astype(int).to_numpy()
+        except Exception:
+            raise HTTPException(status_code=400, detail="Ground-truth labels could not be mapped to known classes.")
     else:
-        preds = [str(y_pred[i]) for i in range(k)]
+        # Fallback: try to interpret labels as numeric indices already
+        y_true_idx = pd.to_numeric(y_true_raw, errors="coerce")
+        mask = mask & y_true_idx.notna()
+        y_true_idx = y_true_idx.astype(int).to_numpy()
 
-    return {"rows_received": int(n), "rows_returned": int(k), "predictions": preds}
+    # Align predictions to the same valid mask (drop rows with unknown/missing GT)
+    y_pred_idx = np.asarray(y_pred_idx)
+    if y_pred_idx.shape[0] != mask.shape[0]:
+        raise HTTPException(status_code=500, detail="Shape mismatch between predictions and labels after preprocessing.")
 
-@app.post("/api/model/evaluate-csv")
-async def api_evaluate_csv(
-    file: UploadFile = File(...),
-    label_col: Optional[str] = None,
-):
-    """
-    Upload a CSV *with labels* and get metrics:
-      accuracy, macro-F1, per-class report, confusion matrix.
-    If label_col is omitted, we auto-detect (koi_pdisposition / tfopwg_disposition / disposition).
-    """
-    warmup()
+    y_true_eval = y_true_idx[mask.to_numpy()]
+    y_pred_eval = y_pred_idx[mask.to_numpy()]
 
-    content = await file.read()
-    if not content:
-        raise HTTPException(400, "Empty file.")
+    if y_true_eval.size == 0:
+        raise HTTPException(status_code=400, detail="No valid rows with recognizable ground-truth labels to evaluate.")
 
-    df = tolerant_read_csv(content)
-    df = normalize_columns(df)
+    # Metrics
+    acc = float(accuracy_score(y_true_eval, y_pred_eval))
+    f1m = float(f1_score(y_true_eval, y_pred_eval, average="macro"))
+    bacc = float(balanced_accuracy_score(y_true_eval, y_pred_eval))
 
-    raw_label = find_label_column(df, label_col)
-    if not raw_label:
-        raise HTTPException(
-            400,
-            "No label column found. Provide ?label_col=... or include one of: "
-            "koi_pdisposition, tfopwg_disposition, disposition."
-        )
+    labels_range = None
+    target_names = None
+    if class_names is not None:
+        labels_range = list(range(len(class_names)))
+        target_names = class_names
 
-    y_true = df[raw_label].astype(str).values
-    X = df.drop(columns=[raw_label]).copy()
+    # Confusion matrix (ensure consistent label order if available)
+    cm = confusion_matrix(
+        y_true_eval, y_pred_eval, labels=labels_range
+    ).tolist() if labels_range is not None else confusion_matrix(
+        y_true_eval, y_pred_eval
+    ).tolist()
 
-    feats = getattr(_PIPELINE, "feature_names_in_", None)
-    X = align_features(X, list(feats) if feats is not None else None)
+    # Classification report as a dict for easy JSON
+    cr = classification_report(
+        y_true_eval,
+        y_pred_eval,
+        labels=labels_range,
+        target_names=target_names,
+        output_dict=True,
+        zero_division=0
+    )
 
-    y_pred = _PIPELINE.predict(X)
-
-    # inverse-transform for fair string-based comparison
-    try:
-        if _ENCODER is not None:
-            y_pred_eval = _ENCODER.inverse_transform(y_pred)
-        else:
-            y_pred_eval = y_pred
-    except Exception:
-        y_pred_eval = y_pred
-
-    acc = float(accuracy_score(y_true, y_pred_eval))
-    f1m = float(f1_score(y_true, y_pred_eval, average="macro"))
-    report = classification_report(y_true, y_pred_eval, output_dict=True)
-    cm = confusion_matrix(y_true, y_pred_eval).tolist()
-
-    return {
-        "n_rows": int(len(df)),
-        "label_col": raw_label,
-        "accuracy": acc,
-        "f1_macro": f1m,
-        "report": report,
-        "confusion_matrix": cm,
+    # Add a compact prediction summary (use evaluated rows only)
+    u, c = np.unique(y_pred_eval, return_counts=True)
+    counts_by_class = {
+        (class_names[i] if class_names is not None else int(i)): int(n)
+        for i, n in zip(u, c)
     }
+
+    resp = {
+        "evaluated_rows": int(y_true_eval.shape[0]),
+        "accuracy": acc,
+        "macro_f1": f1m,
+        "balanced_accuracy": bacc,
+        "confusion_matrix": {
+            "labels": class_names if class_names is not None else None,
+            "matrix": cm
+        },
+        "classification_repor/Users/saadkhan/Downloads/best_pipeline.joblib /Users/saadkhan/Downloads/label_encoder.joblib /Users/saadkhan/Downloads/feature_names.jsont": cr,
+        "class_names": class_names,
+        "prediction_counts": counts_by_class
+    }
+    return resp
