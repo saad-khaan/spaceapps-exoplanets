@@ -14,9 +14,13 @@ export default function HeroSection() {
     <p className="text-lg text-gray-300 mb-8">
       Discover missions like TESS, K2, and KOI.
     </p>
-    <button className="px-6 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg text-lg font-semibold shadow-lg transition">
-      Get Started
-    </button>
+    <button
+  onClick={() => navigate("/missions")}
+  className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-md font-semibold shadow-lg hover:shadow-[0_0_20px_#00bfff] transition-all"
+>
+  Get Started
+</button>
+
       </div>
     </section>
   );
