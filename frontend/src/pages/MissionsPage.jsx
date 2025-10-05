@@ -9,13 +9,12 @@ export default function MissionsPage() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-b from-black via-gray-900 to-black text-white px-6 pt-24">
 
-
-      {/* === NASA Deep-Space Background === */}
+      {/* === NASA Background === */}
       <div
         className="absolute inset-0 bg-[url('https://images-assets.nasa.gov/image/PIA12235/PIA12235~orig.jpg')] bg-cover bg-center bg-fixed opacity-30"
       ></div>
 
-      {/* === Shining Stars Background (brighter & clear) === */}
+      {/* === Shining Stars Background === */}
       <div className="absolute inset-0 z-[2] pointer-events-none">
         <ShiningStarsBackground />
       </div>
@@ -23,11 +22,10 @@ export default function MissionsPage() {
       {/* === Overlay gradient for smooth fade === */}
       <div className="absolute inset-0 bg-gradient-to-b from-[#000814]/70 via-[#000814]/90 to-black/95 z-[1]"></div>
 
-      {/* === Transparent Navbar (no solid block, stars show through) === */}
+      {/* === Transparent Navbar === */}
       <nav className="fixed top-0 w-full z-[50] bg-transparent backdrop-filter-none shadow-none border-none pointer-events-auto">
-  {/* your existing navbar content here */}
-</nav>
-
+        {/* your existing navbar content here */}
+      </nav>
 
       {/* === Revolving Solar System Background === */}
       <div className="absolute inset-0 z-[1] pointer-events-none">
@@ -37,26 +35,26 @@ export default function MissionsPage() {
       {/* === Main Page Content === */}
       <div className="relative z-10 flex flex-col items-center justify-center">
 
-        {/* === Header Above Earth === */}
+        {/* === Header Above Earth (moved up) === */}
         <motion.p
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, ease: "easeOut" }}
-          className="mt-1 text-3xl md:text-4xl font-semibold text-blue-300 mb-16 text-center drop-shadow-[0_0_10px_#00bfff]"
+          className="mt-[-60px] text-3xl md:text-4xl font-semibold text-blue-300 mb-20 text-center drop-shadow-[0_0_10px_#00bfff]"
         >
           Select a NASA mission to test its exoplanet dataset
         </motion.p>
 
-        {/* === Rotating Earth === */}
-        <div className="relative flex items-center justify-center mt-20">
+        {/* === Rotating Earth (bigger size) === */}
+        <div className="relative flex items-center justify-center mt-12">
           <motion.img
             src="https://upload.wikimedia.org/wikipedia/commons/9/97/The_Earth_seen_from_Apollo_17.jpg"
             alt="Planet Earth"
-            className="w-96 h-96 rounded-full shadow-[0_0_70px_#00bfff] border-4 border-blue-500"
+            className="w-[520px] h-[520px] md:w-[600px] md:h-[600px] rounded-full shadow-[0_0_90px_#00bfff] border-4 border-blue-500"
             animate={{ rotate: 360 }}
             transition={{
               repeat: Infinity,
-              duration: 40,
+              duration: 50,
               ease: "linear",
             }}
           />
@@ -65,7 +63,7 @@ export default function MissionsPage() {
           <div
             className="absolute flex flex-col items-center"
             style={{
-              top: "-45px",
+              top: "-60px",
               left: "50%",
               transform: "translateX(-50%)",
             }}
@@ -78,7 +76,7 @@ export default function MissionsPage() {
             >
               <motion.button
                 onClick={() => navigate("/upload/tess")}
-                className="bg-blue-600 hover:bg-blue-700 px-6 py-3 rounded-full text-lg font-semibold shadow-[0_0_25px_#00bfff] transition-transform hover:scale-110"
+                className="bg-blue-600 hover:bg-blue-700 px-7 py-3 rounded-full text-lg font-semibold shadow-[0_0_25px_#00bfff] transition-transform hover:scale-110"
               >
                 TESS
               </motion.button>
@@ -101,8 +99,8 @@ export default function MissionsPage() {
           <div
             className="absolute flex flex-col items-center"
             style={{
-              bottom: "-8px",
-              left: "calc(40% - 130px)",
+              bottom: "-20px",
+              left: "calc(35% - 130px)",
             }}
           >
             <motion.div
@@ -113,7 +111,7 @@ export default function MissionsPage() {
             >
               <motion.button
                 onClick={() => navigate("/upload/k2")}
-                className="bg-purple-600 hover:bg-purple-700 px-6 py-3 rounded-full text-lg font-semibold shadow-[0_0_25px_#b266ff] transition-transform hover:scale-110"
+                className="bg-purple-600 hover:bg-purple-700 px-7 py-3 rounded-full text-lg font-semibold shadow-[0_0_25px_#b266ff] transition-transform hover:scale-110"
               >
                 K2
               </motion.button>
@@ -136,8 +134,8 @@ export default function MissionsPage() {
           <div
             className="absolute flex flex-col items-center"
             style={{
-              bottom: "-8px",
-              right: "calc(40% - 130px)",
+              bottom: "-20px",
+              right: "calc(35% - 130px)",
             }}
           >
             <motion.div
@@ -148,7 +146,7 @@ export default function MissionsPage() {
             >
               <motion.button
                 onClick={() => navigate("/upload/koi")}
-                className="bg-pink-600 hover:bg-pink-700 px-6 py-3 rounded-full text-lg font-semibold shadow-[0_0_25px_#ff3fa4] transition-transform hover:scale-110"
+                className="bg-pink-600 hover:bg-pink-700 px-7 py-3 rounded-full text-lg font-semibold shadow-[0_0_25px_#ff3fa4] transition-transform hover:scale-110"
               >
                 KOI
               </motion.button>
