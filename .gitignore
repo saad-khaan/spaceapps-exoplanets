@@ -1,18 +1,62 @@
-# Node
-node_modules/
-dist/
-.vite/
-
-# Python
+# === General ===
+.DS_Store
+Thumbs.db
+*.log
+*.tmp
+*.swp
 __pycache__/
-.venv/
-.pytest_cache/
 *.pyc
-
-# Env & local files
 .env
 .env.*
-.DS_Store
+.vscode/
+.idea/
 
-# Data (no large files)
-data-samples/**/*.fits
+# === Python backend ===
+backend/__pycache__/
+backend/.pytest_cache/
+backend/.mypy_cache/
+backend/.venv/
+backend/venv/
+backend/*.egg-info/
+backend/.ruff_cache/
+backend/.coverage
+backend/htmlcov/
+backend/app/__pycache__/
+backend/app/*.pyc
+
+# Ignore trained model weights or ML artifacts (large/binary)
+backend/app/artifacts/
+backend/app/checkpoints/
+backend/app/models/*.pkl
+backend/app/models/*.pt
+backend/app/models/*.joblib
+
+# === Node/React frontend ===
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+frontend/.vite/
+frontend/.parcel-cache/
+frontend/.eslintcache
+frontend/.env
+frontend/.env.local
+
+# === OS / Editor files ===
+*.bak
+*.orig
+*.tmp
+*.log
+*.out
+*.pid
+*.gz
+
+# === Docker / Compose ===
+*.pid
+*.tar
+docker-compose.override.yml
+
+# === Misc ===
+*.zip
+*.rar
+*.tar.gz
+*.7z
