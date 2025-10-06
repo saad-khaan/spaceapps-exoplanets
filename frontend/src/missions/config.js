@@ -1,6 +1,7 @@
+// src/missions/config.js
 export const MISSION_TO_MODEL = {
-  KOI:  "koi",
-  K2:   "k2",
+  KOI: "koi",
+  K2: "k2",
   TESS: "tess",
 };
 

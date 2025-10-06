@@ -42,7 +42,7 @@ def add_uncertainty_features(df_in: pd.DataFrame,
                              keep_asymmetric: bool,
                              min_den: float) -> Tuple[pd.DataFrame, List[str]]:
     """
-    Converts paired *_err1/*_err2 columns into <base>_rel_error (and optional asymmetric rel errors),
+    Converts paired _err1/_err2 columns into <base>_rel_error (and optional asymmetric rel errors),
     then drops the raw error columns. Works with exact suffixes '_err1'/'_err2'.
     """
     df_out = df_in.copy()
@@ -81,7 +81,29 @@ def add_uncertainty_features(df_in: pd.DataFrame,
 
     return df_out, sorted(new_cols.keys())
 
-# ============================================================
+# <-- ADD THIS AS A TOP-LEVEL HELPER (not nested) -->
+def _predict_proba_safe(pipe, X: pd.DataFrame):
+    """
+    Return class probabilities if the final estimator supports it.
+    If not, try decision_function -> softmax fallback. Otherwise None.
+    """
+    clf = getattr(pipe, "named_steps", {}).get("clf", pipe)
+    if hasattr(clf, "predict_proba"):
+        try:
+            return pipe.predict_proba(X)
+        except Exception:
+            pass
+    if hasattr(clf, "decision_function"):
+        try:
+            scores = pipe.decision_function(X)
+            scores = np.atleast_2d(scores)
+            z = scores - scores.max(axis=1, keepdims=True)
+            expz = np.exp(z)
+            return expz / expz.sum(axis=1, keepdims=True)
+        except Exception:
+            pass
+    return None
+#====================
 # Model spec & registry
 # ============================================================
 @dataclass
@@ -527,3 +549,149 @@ async def evaluate(file: UploadFile = File(...),
         "class_names": spec.class_names,
         "prediction_counts": counts_by_class
     }
+
+    #===== 2) Add this new endpoint with the other endpoints (after /evaluate is fine) =====
+
+
+@app.post("/analyze")
+async def analyze(
+        file: UploadFile = File(...),
+        model: Optional[str] = Query(None),
+        include_proba: bool = Query(True, description="Include top-k probabilities when labels are missing"),
+        top_k: int = Query(3, ge=1, le=10, description="Top-k classes to return when predicting")
+) -> Dict[str, Any]:
+        """
+        Smart endpoint:
+          - If the uploaded CSV HAS the label column for the chosen model -> returns full evaluation (metrics + CM + per-class report)
+          - Otherwise -> returns predictions (labels + optional top-k probabilities)
+        Frontend can just call /analyze for both cases.
+        """
+        if not file.filename.lower().endswith(".csv"):
+            raise HTTPException(400, "Please upload a .csv file.")
+        spec = _get_spec(model)
+        content = await file.read()
+
+        # Peek header to see if label exists
+        try:
+            hdr = detect_header_row_from_bytes(content, spec.header_identifiers)
+            raw_df = pd.read_csv(io.StringIO(content.decode("utf-8", errors="ignore")), header=hdr)
+        except Exception as e:
+            raise HTTPException(400, f"CSV read error: {e}")
+
+        has_label = spec.label_col in raw_df.columns
+
+        # Build X once (shared)
+        try:
+            X = spec.preprocess_fn(content) if spec.preprocess_fn else None
+            if X is None:
+                raise ValueError("No preprocessing function configured.")
+        except Exception as e:
+            raise HTTPException(400, f"Preprocessing error: {e}")
+
+        # --------- Path A: Evaluate (labels present) ---------
+        if has_label:
+            try:
+                y_pred_idx = spec.pipe.predict(X)
+            except Exception as e:
+                raise HTTPException(500, f"Inference error: {e}")
+
+            y_true_raw = raw_df[spec.label_col].astype(str)
+            mask = y_true_raw.notna()
+
+            if spec.class_names is not None:
+                mapping = {lbl: i for i, lbl in enumerate(spec.class_names)}
+                y_true_idx = y_true_raw.map(mapping)
+                mask = mask & y_true_idx.notna()
+                try:
+                    y_true_idx = y_true_idx.astype(int).to_numpy()
+                except Exception:
+                    raise HTTPException(400, "Ground-truth labels could not be mapped to known classes.")
+            else:
+                y_true_idx = pd.to_numeric(y_true_raw, errors="coerce")
+                mask = mask & y_true_idx.notna()
+                y_true_idx = y_true_idx.astype(int).to_numpy()
+
+            y_pred_idx = np.asarray(y_pred_idx)
+            if y_pred_idx.shape[0] != mask.shape[0]:
+                raise HTTPException(500, "Shape mismatch between predictions and labels after preprocessing.")
+
+            y_true_eval = y_true_idx[mask.to_numpy()]
+            y_pred_eval = y_pred_idx[mask.to_numpy()]
+
+            if y_true_eval.size == 0:
+                raise HTTPException(400, "No valid rows with recognizable ground-truth labels to evaluate.")
+
+            acc = float(accuracy_score(y_true_eval, y_pred_eval))
+            f1m = float(f1_score(y_true_eval, y_pred_eval, average="macro"))
+            bacc = float(balanced_accuracy_score(y_true_eval, y_pred_eval))
+
+            labels_range = list(range(len(spec.class_names))) if spec.class_names is not None else None
+            cm = confusion_matrix(y_true_eval, y_pred_eval, labels=labels_range).tolist() \
+                if labels_range is not None else confusion_matrix(y_true_eval, y_pred_eval).tolist()
+
+            cr = classification_report(
+                y_true_eval, y_pred_eval,
+                labels=labels_range,
+                target_names=spec.class_names if spec.class_names is not None else None,
+                output_dict=True,
+                zero_division=0
+            )
+
+            u, c = np.unique(y_pred_eval, return_counts=True)
+            counts_by_class = {
+                (spec.class_names[i] if spec.class_names is not None else int(i)): int(n)
+                for i, n in zip(u, c)
+            }
+
+            return {
+                "mode": "evaluate",
+                "model": spec.slug,
+                "evaluated_rows": int(y_true_eval.shape[0]),
+                "accuracy": acc,
+                "macro_f1": f1m,
+                "balanced_accuracy": bacc,
+                "confusion_matrix": {"labels": spec.class_names, "matrix": cm},
+                "classification_report": cr,
+                "class_names": spec.class_names,
+                "prediction_counts": counts_by_class
+            }
+
+        # --------- Path B: Predict (labels missing) ---------
+        try:
+            pred_idx = spec.pipe.predict(X).tolist()
+            pred_labels = [spec.class_names[i] for i in pred_idx] if spec.class_names is not None else pred_idx
+
+            u, c = np.unique(pred_idx, return_counts=True)
+            counts_by_class = {
+                (spec.class_names[i] if spec.class_names is not None else int(i)): int(n)
+                for i, n in zip(u, c)
+            }
+
+            resp: Dict[str, Any] = {
+                "mode": "predict",
+                "model": spec.slug,
+                "n_rows": int(X.shape[0]),
+                "pred_labels": pred_labels,
+                "class_names": spec.class_names,
+                "counts_by_class": counts_by_class
+            }
+
+            if include_proba:
+                P = _predict_proba_safe(spec.pipe, X)
+                if P is not None and spec.class_names is not None:
+                    topk_rows = []
+                    for row in P:
+                        idx = np.argsort(row)[::-1][:top_k]
+                        topk_rows.append(
+                            [{"label": spec.class_names[i], "prob": float(row[i])} for i in idx]
+                        )
+                    resp["topk_proba"] = topk_rows
+                    resp["max_confidence"] = [float(row.max()) for row in P]
+                else:
+                    resp["topk_proba"] = None
+                    resp["max_confidence"] = None
+
+            return resp
+
+        except Exception as e:
+            raise HTTPException(500, f"Inference error: {e}")

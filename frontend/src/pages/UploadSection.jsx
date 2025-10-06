@@ -48,8 +48,8 @@ export default function UploadSection() {
   const [msg, setMsg] = useState("");
 
   // results
-  const [evalRes, setEvalRes] = useState(null);
-  const [predRes, setPredRes] = useState(null);
+  const [evalRes, setEvalRes] = useState(null); // r.mode === "evaluate"
+  const [predRes, setPredRes] = useState(null); // r.mode === "predict"
 
   // extras
   const [normMode, setNormMode] = useState("count"); // "count" | "row"
@@ -65,6 +65,7 @@ export default function UploadSection() {
     setPredRes(null);
   };
 
+  // ✅ One endpoint now: /analyze
   const handleAnalyze = async () => {
     if (!file || !model) {
       setError(true);
@@ -80,18 +81,17 @@ export default function UploadSection() {
     setPredRes(null);
 
     try {
-      const r = await api.evaluate(file, model);
-      setEvalRes(r);
-      saveLast(model, r);
-      setMsg(`Analyzed ${missionKey} with ground-truth labels`);
-    } catch (e) {
-      if (e.status === 400 && /label/i.test(e.message)) {
-        const p = await api.predict(file, model);
-        setPredRes(p);
-        setMsg("No label column detected. Showing predictions instead.");
+      const r = await api.analyze(file, model);
+      if (r.mode === "evaluate") {
+        setEvalRes(r);
+        saveLast(model, r);
+        setMsg(`Analyzed ${missionKey} with ground-truth labels ✅`);
       } else {
-        setMsg(`Error: ${e.message}`);
+        setPredRes(r);
+        setMsg("No label column detected. Showing predictions and top-k probabilities.");
       }
+    } catch (e) {
+      setMsg(`Error: ${e.message}`);
     } finally {
       setBusy(false);
     }
@@ -297,8 +297,7 @@ export default function UploadSection() {
                           const raw = matrix[i][j];
                           const intensity = maxCell ? v / maxCell : 0;
                           const bg = `rgba(34,197,94,${0.12 + 0.75 * intensity})`;
-                          const label =
-                            normMode === "row" ? `${(v * 100).toFixed(1)}%` : String(raw);
+                          const label = normMode === "row" ? `${(v * 100).toFixed(1)}%` : String(raw);
                           return (
                             <div
                               key={`${i}-${j}`}
@@ -368,35 +367,62 @@ export default function UploadSection() {
 
       {/* ===== Predictions (no labels) ===== */}
       {predRes && (
-        <div className="mt-8 w-full max-w-3xl space-y-4">
+        <div className="mt-8 w-full max-w-6xl space-y-6">
           <h2 className="text-xl font-semibold text-blue-300">Predictions</h2>
 
           <div className="grid sm:grid-cols-3 gap-4">
+            <MetricCard label="Rows" value={predRes.n_rows ?? predRes.rows_received ?? "-"} />
+            <MetricCard label="Classes" value={(predRes.class_names || []).join(", ")} />
             <MetricCard
-              label="Rows received"
-              value={predRes.n_rows ?? predRes.rows_received ?? "-"}
-            />
-            <MetricCard
-              label="Unique counts"
+              label="Avg. max confidence"
               value={
-                predRes.counts_by_class
-                  ? Object.values(predRes.counts_by_class).reduce((a, b) => a + b, 0)
+                Array.isArray(predRes.max_confidence) && predRes.max_confidence.length
+                  ? (
+                      predRes.max_confidence.reduce((a, b) => a + b, 0) /
+                      predRes.max_confidence.length
+                    ).toFixed(3)
                   : "-"
               }
             />
-            <MetricCard label="Classes" value={(predRes.class_names || []).join(", ")} />
           </div>
 
-          <div className="bg-white/5 border border-white/10 rounded p-4">
-            <h3 className="font-semibold mb-2">First 20 Predictions</h3>
-            <ul className="text-sm space-y-1">
-              {(predRes.pred_labels || predRes.predictions || [])
-                .slice(0, 20)
-                .map((p, i) => (
+          {/* Top-k probabilities per row */}
+          {Array.isArray(predRes.topk_proba) && (
+            <div className="bg-white/5 border border-white/10 rounded p-4">
+              <h3 className="font-semibold mb-2">Prediction probabilities (top-k)</h3>
+              <ul className="text-sm space-y-3 max-h-[60vh] overflow-auto">
+                {predRes.topk_proba.map((row, i) => (
                   <li key={i} className="bg-black/30 border border-white/10 rounded px-3 py-2">
-                    {typeof p === "string" ? p : JSON.stringify(p)}
+                    <div className="font-medium mb-1 text-slate-200">Sample {i + 1}</div>
+                    {row.map((p, j) => (
+                      <div key={j} className="flex items-center justify-between">
+                        <span className="text-slate-300">{p.label}</span>
+                        <span className="text-slate-400">{(p.prob * 100).toFixed(2)}%</span>
+                      </div>
+                    ))}
                   </li>
                 ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Distribution of predicted classes */}
+          {predRes.counts_by_class && (
+            <div className="bg-white/5 border border-white/10 rounded p-4">
+              <h3 className="font-semibold mb-2">Prediction distribution</h3>
+              <MiniBars counts={predRes.counts_by_class} />
+            </div>
+          )}
+
+          {/* First 20 raw labels (optional) */}
+          <div className="bg-white/5 border border-white/10 rounded p-4">
+            <h3 className="font-semibold mb-2">First 20 predicted labels</h3>
+            <ul className="text-sm space-y-1">
+              {(predRes.pred_labels || predRes.predictions || []).slice(0, 20).map((p, i) => (
+                <li key={i} className="bg-black/30 border border-white/10 rounded px-3 py-2">
+                  {typeof p === "string" ? p : JSON.stringify(p)}
+                </li>
+              ))}
             </ul>
           </div>
         </div>
@@ -438,7 +464,6 @@ export default function UploadSection() {
 /* =========================
    Tiny presentational bits
 ========================= */
-
 function MetricCard({ label, value, delta = null }) {
   const showDelta = delta !== null && delta !== undefined && Number.isFinite(delta);
   const up = showDelta && delta >= 0;
@@ -472,29 +497,22 @@ function SupportBar({ value, total }) {
 function MiniBars({ counts }) {
   const entries = Object.entries(counts || {});
   const total = entries.reduce((a, [, n]) => a + n, 0) || 1;
-  const maj =
-    entries.reduce((p, c) => (c[1] > p[1] ? c : p), entries[0] || ["N/A", 0]);
+  const maj = entries.reduce((p, c) => (c[1] > p[1] ? c : p), entries[0] || ["N/A", 0]);
 
   return (
     <div className="space-y-2">
       <div className="flex gap-3 items-end">
         {entries.map(([k, v]) => (
           <div key={k} className="text-center">
-            <div
-              className="w-10 bg-zinc-700"
-              style={{ height: `${(v / total) * 80 + 10}px` }}
-            />
+            <div className="w-10 bg-zinc-700" style={{ height: `${(v / total) * 80 + 10}px` }} />
             <div className="text-xs mt-1">{k}</div>
-            <div className="text-[10px] text-slate-400">
-              {((v / total) * 100).toFixed(1)}%
-            </div>
+            <div className="text-[10px] text-slate-400">{((v / total) * 100).toFixed(1)}%</div>
           </div>
         ))}
       </div>
       {maj && (
         <div className="text-xs text-slate-400">
-          Majority: <span className="text-slate-200">{maj[0]}</span>{" "}
-          ({((maj[1] / total) * 100).toFixed(1)}%)
+          Majority: <span className="text-slate-200">{maj[0]}</span> ({((maj[1] / total) * 100).toFixed(1)}%)
         </div>
       )}
     </div>
@@ -502,7 +520,6 @@ function MiniBars({ counts }) {
 }
 
 /* ===== Insights block (top-level) ===== */
-
 function Headline({ label, value }) {
   return (
     <div className="rounded bg-white/5 border border-white/10 p-3">
@@ -516,20 +533,15 @@ function Insights({ evalRes }) {
   if (!evalRes) return null;
 
   const round = (x, d = 4) =>
-    x === undefined || x === null || Number.isNaN(Number(x))
-      ? "-"
-      : Number(x).toFixed(d);
+    x === undefined || x === null || Number.isNaN(Number(x)) ? "-" : Number(x).toFixed(d);
 
   const cr = evalRes.classification_report || {};
-  const labels =
-    (evalRes.confusion_matrix && evalRes.confusion_matrix.labels) || [];
-  const cm =
-    (evalRes.confusion_matrix && evalRes.confusion_matrix.matrix) || [];
+  const labels = (evalRes.confusion_matrix && evalRes.confusion_matrix.labels) || [];
+  const cm = (evalRes.confusion_matrix && evalRes.confusion_matrix.matrix) || [];
 
   const perClass = Object.entries(cr)
     .filter(
-      ([k, v]) =>
-        v && typeof v === "object" && !["accuracy", "macro avg", "weighted avg"].includes(k)
+      ([k, v]) => v && typeof v === "object" && !["accuracy", "macro avg", "weighted avg"].includes(k)
     )
     .map(([name, m]) => ({
       name,
@@ -543,8 +555,7 @@ function Insights({ evalRes }) {
   const weakest = byRecall.slice(-2);
   const strongest = byRecall.slice(0, 2);
 
-  let predCounts =
-    evalRes.prediction_counts || evalRes.counts_by_class || null;
+  let predCounts = evalRes.prediction_counts || evalRes.counts_by_class || null;
   if (!predCounts && cm.length && labels.length === cm.length) {
     const cols = Array(labels.length).fill(0);
     for (let r = 0; r < cm.length; r++) {
@@ -552,9 +563,7 @@ function Insights({ evalRes }) {
     }
     predCounts = Object.fromEntries(labels.map((lab, i) => [lab, cols[i]]));
   }
-  const predDist = predCounts
-    ? Object.entries(predCounts).sort((a, b) => b[1] - a[1])
-    : [];
+  const predDist = predCounts ? Object.entries(predCounts).sort((a, b) => b[1] - a[1]) : [];
 
   let worstPair = null;
   if (cm.length && labels.length === cm.length) {
@@ -575,15 +584,12 @@ function Insights({ evalRes }) {
 
   const bySupport = [...perClass].sort((a, b) => b.support - a.support);
   const imbalance =
-    bySupport.length >= 2 &&
-    bySupport[0].support > 5 * Math.max(1, bySupport[bySupport.length - 1].support);
+    bySupport.length >= 2 && bySupport[0].support > 5 * Math.max(1, bySupport[bySupport.length - 1].support);
 
   const actions = [];
   if (weakest.length) {
     actions.push(
-      `Improve recall for ${weakest.map((w) => w.name).join(
-        " & "
-      )} (target examples, augmentation, or reweighting).`
+      `Improve recall for ${weakest.map((w) => w.name).join(" & ")} (target examples, augmentation, or reweighting).`
     );
   }
   if (worstPair) {
@@ -596,40 +602,20 @@ function Insights({ evalRes }) {
     const total = predDist.reduce((s, [, n]) => s + n, 0);
     const pct = total ? (100 * topCount) / total : 0;
     if (pct > 50)
-      actions.push(
-        `Predictions skew to ${topLabel} (${pct.toFixed(
-          1
-        )}%). Check class balance or adjust thresholds.`
-      );
+      actions.push(`Predictions skew to ${topLabel} (${pct.toFixed(1)}%). Check class balance or adjust thresholds.`);
   }
-  if (imbalance)
-    actions.push(
-      "Dataset is imbalanced (largest class >5× smallest). Consider class weights or resampling."
-    );
-  actions.push(
-    "Share the model card for context on data, metrics, and limitations."
-  );
+  if (imbalance) actions.push("Dataset is imbalanced (largest class >5× smallest). Consider class weights or resampling.");
+  actions.push("Share the model card for context on data, metrics, and limitations.");
 
   return (
     <div className="mt-8 w-full max-w-4xl">
-      <h3 className="text-lg font-semibold text-blue-300 mb-3">
-        Insights & Recommendations
-      </h3>
+      <h3 className="text-lg font-semibold text-blue-300 mb-3">Insights & Recommendations</h3>
 
       <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-        <Headline
-          label="Rows"
-          value={evalRes.evaluated_rows ?? evalRes.n_rows ?? "-"}
-        />
+        <Headline label="Rows" value={evalRes.evaluated_rows ?? evalRes.n_rows ?? "-"} />
         <Headline label="Accuracy" value={round(evalRes.accuracy)} />
-        <Headline
-          label="F1 (macro)"
-          value={round(evalRes.macro_f1 || evalRes.f1_macro)}
-        />
-        <Headline
-          label="Balanced Acc."
-          value={round(evalRes.balanced_accuracy)}
-        />
+        <Headline label="F1 (macro)" value={round(evalRes.macro_f1 || evalRes.f1_macro)} />
+        <Headline label="Balanced Acc." value={round(evalRes.balanced_accuracy)} />
       </div>
 
       <div className="bg-white/5 border border-white/10 rounded p-4 mb-4">
@@ -637,13 +623,11 @@ function Insights({ evalRes }) {
         <div className="text-sm text-slate-200">
           <div className="mb-2">
             <span className="text-slate-400">Strongest (recall): </span>
-            {strongest.map((s) => `${s.name} (R=${round(s.recall)})`).join(", ") ||
-              "-"}
+            {strongest.map((s) => `${s.name} (R=${round(s.recall)})`).join(", ") || "-"}
           </div>
           <div>
             <span className="text-slate-400">Needs attention (recall): </span>
-            {weakest.map((w) => `${w.name} (R=${round(w.recall)})`).join(", ") ||
-              "-"}
+            {weakest.map((w) => `${w.name} (R=${round(w.recall)})`).join(", ") || "-"}
           </div>
         </div>
       </div>
@@ -653,8 +637,7 @@ function Insights({ evalRes }) {
         <ul className="list-disc ml-5 text-sm space-y-1">
           {worstPair ? (
             <li>
-              <span className="text-slate-300">Largest confusion:</span>{" "}
-              {worstPair.from} → {worstPair.to} ({worstPair.count})
+              <span className="text-slate-300">Largest confusion:</span> {worstPair.from} → {worstPair.to} ({worstPair.count})
             </li>
           ) : (
             <li>No dominant confusion found.</li>
@@ -665,11 +648,7 @@ function Insights({ evalRes }) {
               {predDist.map(([k, v]) => `${k}: ${v}`).join(", ")}
             </li>
           ) : null}
-          {imbalance && (
-            <li>
-              Dataset is imbalanced; consider class weights or resampling.
-            </li>
-          )}
+          {imbalance && <li>Dataset is imbalanced; consider class weights or resampling.</li>}
         </ul>
       </div>
 
