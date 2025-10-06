@@ -1,6 +1,7 @@
 import abdullahImg from "../assets/Abdullah.PNG";
+import saadImg from "../assets/saad.png";
 import taimoorImg from "../assets/taimoor.jpeg";
-import samad from "../assets/Samad.JPG";
+import samadImg from "../assets/Samad.JPG";
 
 export default function AboutPage() {
   return (
@@ -25,11 +26,7 @@ export default function AboutPage() {
         {/* ---- Saad Khan ---- */}
 <div className="flex flex-col items-center">
   <div className="w-44 sm:w-48 h-44 sm:h-48 border-4 border-[#E6EF4C] rounded-2xl overflow-hidden shadow-[0_0_40px_#E6EF4C] bg-gray-900">
-    <img
-      src="/src/assets/saad.png" // replace with your actual filename
-      alt="Saad Khan"
-      className="object-cover w-full h-full object-center scale-[1.05]"
-    />
+  <img src={saadImg} alt="Saad Khan" className="object-cover w-full h-full object-center scale-[1.05]" />
   </div>
   <p className="mt-4 text-lg sm:text-xl font-semibold text-white">Saad Khan</p>
   <p className="text-sm sm:text-base text-white">Full-Stack Developer</p>
@@ -40,11 +37,7 @@ export default function AboutPage() {
         {/* ---- Muhammad Samad Mahar ---- */}
         <div className="flex flex-col items-center">
           <div className="w-44 sm:w-48 h-44 sm:h-48 border-4 border-[#E6EF4C] rounded-2xl overflow-hidden shadow-[0_0_40px_#E6EF4C] bg-black">
-            <img
-              src="/src/assets/Samad.JPG"
-              alt="Muhammad Samad Mahar"
-              className="object-cover object-[55%_45%] w-full h-full scale-[1.15]"
-            />
+          <img src={samadImg} alt="Muhammad Samad Mahar" className="object-cover object-[55%_45%] w-full h-full scale-[1.15]" />
           </div>
           <p className="mt-4 text-lg sm:text-xl font-semibold text-white">Muhammad Samad Mahar</p>
           <p className="text-sm sm:text-base text-white">UI/UX & Data Visualization</p>
@@ -54,11 +47,7 @@ export default function AboutPage() {
         {/* ---- Abdullah Shah ---- */}
         <div className="flex flex-col items-center">
           <div className="w-44 sm:w-48 h-44 sm:h-48 border-4 border-[#E6EF4C] rounded-2xl overflow-hidden shadow-[0_0_40px_#E6EF4C] bg-black">
-            <img
-              src="/src/assets/Abdullah.PNG"
-              alt="Abdullah Shah"
-              className="object-cover object-top w-full h-full scale-[1.15]"
-            />
+            <img src={abdullahImg} alt="Abdullah Shah" className="object-cover object-top w-full h-full scale-[1.15]" />
           </div>
           <p className="mt-4 text-lg sm:text-xl font-semibold text-white">Abdullah Shah</p>
           <p className="text-sm sm:text-base text-white">Full-Stack Developer</p>
@@ -68,11 +57,7 @@ export default function AboutPage() {
         {/* ---- Taimoor Shahzad ---- */}
         <div className="flex flex-col items-center">
           <div className="w-44 sm:w-48 h-44 sm:h-48 border-4 border-[#E6EF4C] rounded-2xl overflow-hidden shadow-[0_0_40px_#E6EF4C] bg-black">
-            <img
-              src="/src/assets/taimoor.jpeg"
-              alt="Taimoor Shehzad"
-              className="object-cover object-center w-full h-full scale-[1.00]"
-            />
+            <img src={taimoorImg} alt="Taimoor Shahzad" className="object-cover object-center w-full h-full" />
           </div>
           <p className="mt-4 text-lg sm:text-xl font-semibold text-white">Taimoor Shahzad</p>
           <p className="text-sm sm:text-base text-white">ML Research & Development</p>
