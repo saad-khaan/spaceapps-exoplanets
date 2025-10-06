@@ -6,3 +6,4 @@ numpy
 pandas
 python-dotenv
 scikit-learn==1.7.2
+python-multipart>=0.0.9
